@@ -1,0 +1,28 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "A physical product",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "spec": { "type": "string" },
+        "price": { "type": "string" },
+        "description": { "type": "string" },
+        "availability": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "quantity": { "type": "number" },
+        "warehouse": { "type": "string" },
+        "createdAt": { "type": "object" },
+        "lastUpdated": { "type": "object" }
+      }
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Products inventory"
+    }
+  }
+}
