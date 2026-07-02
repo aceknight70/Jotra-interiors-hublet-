@@ -3,6 +3,7 @@ import { db } from '../firebase';
 import { collection, onSnapshot, doc, updateDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { Product } from '../types';
 import { Box, Search, AlertCircle } from 'lucide-react';
+import { handleFirestoreError, OperationType } from '../utils/firebaseError';
 
 export default function WarehouseDashboard() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -18,6 +19,7 @@ export default function WarehouseDashboard() {
     }, (error) => {
       console.error('Error fetching warehouse products:', error);
       setLoading(false);
+      handleFirestoreError(error, OperationType.GET, 'products');
     });
     return () => unsubscribe();
   }, []);
@@ -30,7 +32,7 @@ export default function WarehouseDashboard() {
       });
     } catch (err) {
       console.error('Failed to update quantity', err);
-      alert('Failed to update quantity.');
+      handleFirestoreError(err, OperationType.UPDATE, `products/${id}`);
     }
   };
 

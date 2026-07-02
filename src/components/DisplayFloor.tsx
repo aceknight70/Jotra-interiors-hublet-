@@ -3,6 +3,7 @@ import { db } from '../firebase';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { Product } from '../types';
 import { LayoutDashboard, Maximize2 } from 'lucide-react';
+import { handleFirestoreError, OperationType } from '../utils/firebaseError';
 
 export default function DisplayFloor() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -36,6 +37,7 @@ export default function DisplayFloor() {
     }, (error) => {
       console.error('Error fetching products:', error);
       setLoading(false);
+      handleFirestoreError(error, OperationType.GET, 'products');
     });
     return () => unsubscribe();
   }, []);

@@ -28,6 +28,16 @@ export interface StaffMember {
   status: 'active' | 'inactive';
 }
 
+export interface GalleryPhoto {
+  id: string;
+  name: string;
+  category: string;
+  imageUrl: string;
+  uploadDate: number;
+  uploadedBy: string;
+  status: 'active' | 'archived' | 'draft';
+}
+
 export interface Product {
   id: string;
   name: string;

@@ -3,6 +3,8 @@ import { db } from '../firebase';
 import { collection, onSnapshot, doc, deleteDoc, setDoc, updateDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { Product } from '../types';
 import { ShieldAlert, Plus, Trash2, Package, CheckCircle2, AlertCircle, Camera, Edit2, X, Save, Database } from 'lucide-react';
+import { uploadOrConvertToBase64 } from '../utils/upload';
+import { handleFirestoreError, OperationType } from '../utils/firebaseError';
 
 export default function StaffDashboard() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -23,11 +25,16 @@ export default function StaffDashboard() {
   });
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [uploadingIds, setUploadingIds] = useState<Record<string, boolean>>({});
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
       const prodData = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product));
       setProducts(prodData);
+    }, (error) => {
+      console.error('Error fetching products:', error);
+      handleFirestoreError(error, OperationType.GET, 'products');
     });
     return () => unsubscribe();
   }, []);
@@ -35,11 +42,23 @@ export default function StaffDashboard() {
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.price) return;
+    setSaving(true);
 
     try {
+      let imageUrl = '';
+      const file = (form as any)._newImageFile;
+      
       const newRef = doc(collection(db, 'products'));
+
+      if (file) {
+        imageUrl = await uploadOrConvertToBase64(file, `products/${newRef.id}/${Date.now()}_${file.name}`);
+      }
+
+      const { _previewImage, _newImageFile, ...productData } = form as any;
+
       await setDoc(newRef, {
-        ...form,
+        ...productData,
+        imageUrl,
         createdAt: serverTimestamp(),
         lastUpdated: serverTimestamp()
       });
@@ -47,6 +66,9 @@ export default function StaffDashboard() {
       setForm({ name: '', category: 'furniture', price: '', spec: '', availability: 'in-stock', quantity: 0, staffNotes: '', isAccessory: false });
     } catch (err) {
       console.error('Error adding product', err);
+      handleFirestoreError(err, OperationType.CREATE, 'products');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -88,7 +110,7 @@ export default function StaffDashboard() {
       alert(`✅ Created ${bulkForm.count} products: ${bulkForm.baseName} 1 to ${bulkForm.baseName} ${bulkForm.count}`);
     } catch (err) {
       console.error('Error adding products', err);
-      alert('Failed to bulk add products');
+      handleFirestoreError(err, OperationType.CREATE, 'products');
     }
   };
 
@@ -98,35 +120,43 @@ export default function StaffDashboard() {
       await deleteDoc(doc(db, 'products', id));
     } catch (err) {
       console.error('Error deleting product', err);
+      handleFirestoreError(err, OperationType.DELETE, `products/${id}`);
     }
   };
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProduct) return;
+    setSaving(true);
     try {
-      let imageUrl = editingProduct.imageUrl;
+      let imageUrl = editingProduct.imageUrl || '';
       const file = (editingProduct as any)._newImageFile;
       
       if (file) {
-        const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
-        const { storage } = await import('../firebase');
-        const storageRef = ref(storage, `products/${editingProduct.id}/${Date.now()}_${file.name}`);
-        await uploadBytes(storageRef, file);
-        imageUrl = await getDownloadURL(storageRef);
+        imageUrl = await uploadOrConvertToBase64(file, `products/${editingProduct.id}/${Date.now()}_${file.name}`);
       }
 
-      const { _previewImage, _newImageFile, ...productData } = editingProduct as any;
+      const { id, createdAt, lastUpdated, _previewImage, _newImageFile, ...productData } = editingProduct as any;
+
+      // Clean undefined fields to avoid Firestore errors
+      const cleanedData: any = {};
+      Object.keys(productData).forEach(key => {
+        if (productData[key] !== undefined) {
+          cleanedData[key] = productData[key];
+        }
+      });
 
       await updateDoc(doc(db, 'products', editingProduct.id), {
-        ...productData,
+        ...cleanedData,
         imageUrl,
         lastUpdated: serverTimestamp()
       });
       setEditingProduct(null);
     } catch (err) {
       console.error('Failed to update product', err);
-      alert('Failed to update product');
+      handleFirestoreError(err, OperationType.UPDATE, `products/${editingProduct.id}`);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -176,7 +206,7 @@ export default function StaffDashboard() {
       alert(`Imported ${importedRows.length} products.`);
     } catch (error) {
       console.error('Import error:', error);
-      alert('Failed to import CSV.');
+      handleFirestoreError(error, OperationType.WRITE, 'products');
     }
     
     if (e.target) e.target.value = '';
@@ -408,9 +438,63 @@ export default function StaffDashboard() {
                   This is an Accessory (handles, cushions, etc.)
                 </label>
               </div>
+              
+              <div>
+                <label className="block text-xs font-bold text-neutral-400 mb-1 uppercase">Product Photo</label>
+                <div className="flex items-center gap-3 mt-1">
+                  <div className="w-16 h-16 rounded-xl bg-neutral-800 border border-neutral-700 overflow-hidden shrink-0 flex items-center justify-center">
+                    {(form as any)._previewImage ? (
+                      <img src={(form as any)._previewImage} alt="Preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <Package className="w-6 h-6 text-neutral-500" />
+                    )}
+                  </div>
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'image/*';
+                      input.onchange = (e: any) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const previewUrl = URL.createObjectURL(file);
+                          setForm({ ...form, _previewImage: previewUrl, _newImageFile: file } as any);
+                        }
+                      };
+                      input.click();
+                    }}
+                    className="bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-2"
+                  >
+                    <Camera className="w-4 h-4" /> Choose Photo
+                  </button>
+                  {(form as any)._previewImage && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForm({ ...form, _previewImage: undefined, _newImageFile: undefined } as any);
+                      }}
+                      className="text-red-400 hover:text-red-300 text-xs font-bold"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
-            <button type="submit" className="bg-amber-500 text-neutral-950 font-bold px-6 py-2 rounded-lg hover:bg-amber-400 transition-colors">
-              Add Single Product
+            <button 
+              type="submit" 
+              disabled={saving}
+              className="bg-amber-500 text-neutral-950 font-bold px-6 py-2 rounded-lg hover:bg-amber-400 transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              {saving ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin"></div>
+                  Adding Product...
+                </>
+              ) : (
+                'Add Single Product'
+              )}
             </button>
           </form>
         </div>
@@ -423,11 +507,18 @@ export default function StaffDashboard() {
             {/* Image Area */}
             <div className="relative aspect-square bg-neutral-100 border-b border-neutral-100">
               {p.imageUrl ? (
-                <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                <img src={p.imageUrl} alt={p.name} className={`w-full h-full object-cover transition-opacity ${uploadingIds[p.id] ? 'opacity-30' : ''}`} />
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-neutral-400 bg-neutral-50">
                   <Package className="w-10 h-10 mb-2 opacity-30" />
                   <span className="text-[10px] font-bold uppercase tracking-widest opacity-40">No Image</span>
+                </div>
+              )}
+
+              {uploadingIds[p.id] && (
+                <div className="absolute inset-0 bg-neutral-950/40 backdrop-blur-[2px] flex flex-col items-center justify-center text-white text-xs font-bold gap-2">
+                  <div className="w-6 h-6 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="tracking-wide">Uploading...</span>
                 </div>
               )}
               
@@ -440,26 +531,30 @@ export default function StaffDashboard() {
                   input.onchange = async (e: any) => {
                     const file = e.target.files?.[0];
                     if (file) {
+                      setUploadingIds(prev => ({ ...prev, [p.id]: true }));
                       try {
-                        const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
-                        const { storage } = await import('../firebase');
                         const { updateDoc, doc, serverTimestamp } = await import('firebase/firestore');
-                        const storageRef = ref(storage, `products/${p.id}/${Date.now()}_${file.name}`);
-                        await uploadBytes(storageRef, file);
-                        const url = await getDownloadURL(storageRef);
+                        const url = await uploadOrConvertToBase64(file, `products/${p.id}/${Date.now()}_${file.name}`);
                         await updateDoc(doc(db, 'products', p.id), { imageUrl: url, lastUpdated: serverTimestamp() });
                       } catch (err) {
                         console.error('Upload failed:', err);
-                        alert('Failed to upload image. Check console for details.');
+                        handleFirestoreError(err, OperationType.UPDATE, `products/${p.id}`);
+                      } finally {
+                        setUploadingIds(prev => ({ ...prev, [p.id]: false }));
                       }
                     }
                   };
                   input.click();
                 }}
-                className="absolute bottom-4 right-4 bg-amber-400 hover:bg-amber-500 text-neutral-950 p-2.5 rounded-full shadow-lg border-2 border-white transition-colors z-10"
+                disabled={!!uploadingIds[p.id]}
+                className="absolute bottom-4 right-4 bg-amber-400 hover:bg-amber-500 text-neutral-950 p-2.5 rounded-full shadow-lg border-2 border-white transition-colors z-10 disabled:opacity-50"
                 title="Upload Photo"
               >
-                <Camera className="w-5 h-5" />
+                {uploadingIds[p.id] ? (
+                  <div className="w-5 h-5 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <Camera className="w-5 h-5" />
+                )}
               </button>
 
               {/* Stock Badge */}
@@ -643,10 +738,28 @@ export default function StaffDashboard() {
               </div>
 
               <div className="flex gap-2 pt-4">
-                <button type="submit" className="flex-[2] bg-gradient-to-br from-amber-400 to-amber-600 text-neutral-950 py-3 rounded-xl text-sm font-black hover:scale-[1.02] transition-transform flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20">
-                  <Save className="w-4 h-4" /> Save Changes
+                <button 
+                  type="submit" 
+                  disabled={saving}
+                  className="flex-[2] bg-gradient-to-br from-amber-400 to-amber-600 text-neutral-950 py-3 rounded-xl text-sm font-black hover:scale-[1.02] transition-transform flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 disabled:opacity-50 disabled:scale-100"
+                >
+                  {saving ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin"></div>
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" /> Save Changes
+                    </>
+                  )}
                 </button>
-                <button type="button" onClick={() => setEditingProduct(null)} className="flex-1 bg-neutral-100 border border-neutral-200 text-neutral-900 py-3 rounded-xl text-sm font-bold hover:bg-neutral-200 transition-colors">
+                <button 
+                  type="button" 
+                  onClick={() => setEditingProduct(null)} 
+                  disabled={saving}
+                  className="flex-1 bg-neutral-100 border border-neutral-200 text-neutral-900 py-3 rounded-xl text-sm font-bold hover:bg-neutral-200 transition-colors disabled:opacity-50"
+                >
                   Cancel
                 </button>
               </div>

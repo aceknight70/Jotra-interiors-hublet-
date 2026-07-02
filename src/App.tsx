@@ -6,12 +6,14 @@ import StaffDashboard from './components/StaffDashboard';
 import GoodsHub from './components/GoodsHub';
 import WarehouseDashboard from './components/WarehouseDashboard';
 import DisplayFloor from './components/DisplayFloor';
+import PhotoGallery from './components/PhotoGallery';
 import { Hexagon, LayoutTemplate, Sparkles, ShoppingBag, Lock, LogOut } from 'lucide-react';
 
 export default function App() {
-  const [view, setView] = useState('client');
+  const [view, setViewState] = useState('client');
   const [isStaffLoggedIn, setIsStaffLoggedIn] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  const [pendingView, setPendingView] = useState('');
   const [email, setEmail] = useState('');
   const [pin, setPin] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -22,15 +24,20 @@ export default function App() {
     if (stored) setIsStaffLoggedIn(true);
   }, []);
 
-  const handleEnterOrb = () => {
-    if (isStaffLoggedIn) {
-      setView('portal');
-    } else {
+  const setView = (newView: string) => {
+    if (newView === 'staff' && !isStaffLoggedIn) {
+      setPendingView(newView);
       setShowLogin(true);
       setLoginError('');
       setEmail('admin@jotra.com');
       setPin('0000');
+    } else {
+      setViewState(newView);
     }
+  };
+
+  const handleEnterOrb = () => {
+    setView('portal');
   };
 
   const handleLogin = (e?: React.FormEvent) => {
@@ -50,13 +57,18 @@ export default function App() {
     localStorage.setItem('jt_staffUser', JSON.stringify(found));
     setIsStaffLoggedIn(true);
     setShowLogin(false);
-    setView('portal');
+    if (pendingView) {
+      setViewState(pendingView);
+      setPendingView('');
+    }
   };
 
   const handleLogout = () => {
     localStorage.removeItem('jt_staffUser');
     setIsStaffLoggedIn(false);
-    setView('client');
+    if (view === 'staff') {
+      setViewState('portal');
+    }
   };
 
   if (view === 'client') {
@@ -178,15 +190,29 @@ export default function App() {
       </header>
 
       <main className="p-4 md:p-8 max-w-7xl mx-auto pb-32">
-        {view === 'portal' && <Portal setView={setView} />}
+        {view === 'portal' && (
+          <Portal 
+            setView={setView} 
+            isStaffLoggedIn={isStaffLoggedIn} 
+            staffUser={isStaffLoggedIn ? JSON.parse(localStorage.getItem('jt_staffUser') || 'null') : null}
+            onLoginClick={() => {
+              setShowLogin(true);
+              setLoginError('');
+              setEmail('admin@jotra.com');
+              setPin('0000');
+            }}
+            onLogoutClick={handleLogout}
+          />
+        )}
         {view === 'repair' && <RepairDashboard />}
         {view === 'staff' && <StaffDashboard />}
         {view === 'goods' && <GoodsHub />}
         {view === 'warehouse' && <WarehouseDashboard />}
         {view === 'display' && <DisplayFloor />}
+        {view === 'photos' && <PhotoGallery />}
         
         {/* Placeholder for unimplemented modules */}
-        {!['portal', 'repair', 'staff', 'goods', 'warehouse', 'display'].includes(view) && (
+        {!['portal', 'repair', 'staff', 'goods', 'warehouse', 'display', 'photos'].includes(view) && (
           <div className="text-center py-32 max-w-md mx-auto">
             <div className="bg-neutral-900/50 backdrop-blur border border-amber-500/20 rounded-3xl p-8 shadow-2xl">
               <div className="w-16 h-16 bg-neutral-800 rounded-full flex items-center justify-center mx-auto mb-4">

@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "Jotra Goods Hub",
+  "description": "An administrative dashboard and stock management console for tracking products, managing repairs, and viewing floor inventory.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
