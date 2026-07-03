@@ -65,7 +65,11 @@ export default function PhotoGallery() {
     const file = e.target.files?.[0];
     if (file) {
       setUploadFile(file);
-      setUploadPreview(URL.createObjectURL(file));
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setUploadPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
       setUploadError('');
     }
   };
@@ -95,6 +99,14 @@ export default function PhotoGallery() {
 
       try {
         await setDoc(doc(db, 'gallery', photoId), newPhoto);
+        // Eagerly update local state for snappy updates
+        setPhotos(prev => {
+          const exists = prev.some(p => p.id === photoId);
+          if (exists) return prev;
+          const updated = [newPhoto, ...prev];
+          localStorage.setItem('jt_galleryFallback', JSON.stringify(updated));
+          return updated;
+        });
       } catch (dbErr) {
         console.error('Firebase save failed, falling back to local storage', dbErr);
         // Fallback
@@ -126,6 +138,12 @@ export default function PhotoGallery() {
         category: editingPhoto.category,
         status: editingPhoto.status
       });
+      // Eagerly update local state
+      setPhotos(prev => {
+        const updated = prev.map(p => p.id === editingPhoto.id ? editingPhoto : p);
+        localStorage.setItem('jt_galleryFallback', JSON.stringify(updated));
+        return updated;
+      });
       setEditingPhoto(null);
     } catch (err) {
       console.error('Edit error, updating locally', err);
@@ -150,6 +168,12 @@ export default function PhotoGallery() {
         }
       }
       await deleteDoc(doc(db, 'gallery', photo.id));
+      // Eagerly update local state
+      setPhotos(prev => {
+        const updated = prev.filter(p => p.id !== photo.id);
+        localStorage.setItem('jt_galleryFallback', JSON.stringify(updated));
+        return updated;
+      });
     } catch (err) {
       console.error('Delete error, deleting locally', err);
       const newPhotos = photos.filter(p => p.id !== photo.id);

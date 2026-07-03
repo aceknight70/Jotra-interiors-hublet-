@@ -6,7 +6,7 @@ import { Product } from '../types';
 import { Search, Upload, Plus, Package, ShoppingBag, X, Edit2, Save, Camera, ArrowLeft, Grid } from 'lucide-react';
 import { handleFirestoreError, OperationType } from '../utils/firebaseError';
 
-export default function GoodsHub() {
+export default function GoodsHub({ setView }: { setView?: (v: string) => void }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -18,11 +18,46 @@ export default function GoodsHub() {
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
   const [uploadingIds, setUploadingIds] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+
+  const getMappedCategory = (cat: string) => {
+    const lower = (cat || '').toLowerCase().trim();
+    if (['solar', 'vases', 'frames', 'sculptures', 'solar solutions', 'flower vases', 'picture frames', 'sculptures & art objects'].includes(lower)) {
+      return 'walldecor';
+    }
+    if (lower === 'furniture') return 'furniture';
+    if (lower === 'doors') return 'doors';
+    if (lower === 'gates') return 'gates';
+    if (lower === 'ceilings') return 'ceilings';
+    if (lower === 'lighting') return 'lighting';
+    if (lower === 'rugs') return 'rugs';
+    return lower;
+  };
 
   useEffect(() => {
     const q = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const prodData = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product));
+      let prodData = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product));
+      
+      const categoriesToCheck = ['furniture', 'doors', 'gates', 'ceilings', 'lighting', 'rugs', 'walldecor'];
+      const fallbackProducts: Product[] = [
+        { id: 'fb-furniture', category: 'furniture', name: '3-Seater Sofa (Turkish)', spec: 'Fabric, Hardwood frame, 3+2+1 sets', price: '₦850,000', description: 'Premium Turkish sofa in durable fabric.', availability: 'in-stock', imageUrl: '', staffNotes: 'Available in 5 colours.', quantity: 5, isAccessory: false, createdAt: null },
+        { id: 'fb-doors', category: 'doors', name: 'Steel Security Door (Single)', spec: 'Double lock, Steel frame', price: '₦185,000', description: 'Heavy gauge steel security door.', availability: 'in-stock', imageUrl: '', staffNotes: '', quantity: 10, isAccessory: false, createdAt: null },
+        { id: 'fb-gates', category: 'gates', name: 'Sliding Gate (Motorized)', spec: 'Galvanized steel, Motor included', price: '₦650,000', description: 'Automated sliding gate with remote control.', availability: 'in-stock', imageUrl: '', staffNotes: '', quantity: 3, isAccessory: false, createdAt: null },
+        { id: 'fb-ceilings', category: 'ceilings', name: 'PVC Ceiling Panels (Plain)', spec: 'Per sqm, White, Easy install', price: '₦3,500', description: 'Clean white PVC ceiling panels.', availability: 'in-stock', imageUrl: '', staffNotes: '', quantity: 100, isAccessory: false, createdAt: null },
+        { id: 'fb-lighting', category: 'lighting', name: 'Crystal Chandelier (Small)', spec: 'K9 crystal, 60cm, Chrome', price: '₦185,000', description: 'Classic K9 crystal chandelier.', availability: 'in-stock', imageUrl: '', staffNotes: '', quantity: 8, isAccessory: false, createdAt: null },
+        { id: 'fb-rugs', category: 'rugs', name: 'Luxury Turkish Area Rug', spec: '200x300cm, High pile, Premium wool', price: '₦120,000', description: 'Plush Turkish design rug perfect for living rooms.', availability: 'in-stock', imageUrl: '', staffNotes: 'Available in cream and gray', quantity: 6, isAccessory: false, createdAt: null },
+        { id: 'fb-walldecor', category: 'walldecor', name: 'Gold Framed Wall Art Canvas', spec: 'Abstract style, Metallic gold accents', price: '₦75,000', description: 'An elegant abstract wall art canvas to elevate your living room.', availability: 'in-stock', imageUrl: '', staffNotes: '', quantity: 3, isAccessory: false, createdAt: null }
+      ];
+
+      categoriesToCheck.forEach(cat => {
+        const exists = prodData.some(p => getMappedCategory(p.category) === cat);
+        if (!exists) {
+          const fb = fallbackProducts.find(f => f.category === cat);
+          if (fb) prodData.push(fb);
+        }
+      });
+
       setProducts(prodData);
       setLoading(false);
     }, (error) => {
@@ -32,6 +67,29 @@ export default function GoodsHub() {
     });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (categoryFilter !== 'all' || viewingProduct !== null) {
+      const hasSeen = localStorage.getItem('jt_seen_guide');
+      if (!hasSeen) {
+        setShowGuide(true);
+      }
+    }
+  }, [categoryFilter, viewingProduct]);
+
+  const dismissGuide = () => {
+    setShowGuide(false);
+    localStorage.setItem('jt_seen_guide', 'true');
+  };
+
+  useEffect(() => {
+    if (showGuide) {
+      const timer = setTimeout(() => {
+        dismissGuide();
+      }, 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [showGuide]);
 
   const handlePhotoUpload = async (productId: string, file: File) => {
     setUploadingIds(prev => ({ ...prev, [productId]: true }));
@@ -98,13 +156,13 @@ export default function GoodsHub() {
       { category: 'furniture', name: '3-Seater Sofa (Turkish)', spec: 'Fabric, Hardwood frame, 3+2+1 sets', price: '₦850,000', description: 'Premium Turkish sofa in durable fabric.', availability: 'in-stock', imageUrl: '', staffNotes: 'Available in 5 colours.', quantity: 5, isAccessory: false },
       { category: 'furniture', name: 'King Size Bed Set', spec: 'Upholstered headboard, Turkish fabric', price: '₦750,000', description: 'Luxury king bed with padded headboard.', availability: 'in-stock', imageUrl: '', staffNotes: '', quantity: 2, isAccessory: false },
       { category: 'doors', name: 'Steel Security Door (Single)', spec: 'Double lock, Steel frame', price: '₦185,000', description: 'Heavy gauge steel security door.', availability: 'in-stock', imageUrl: '', staffNotes: '', quantity: 10, isAccessory: false },
+      { category: 'doors', name: 'Premium Bulletproof Door', spec: 'Multi-point locking, Italian core', price: '₦450,000', description: 'High-security heavy-armored luxury entrance door.', availability: 'in-stock', imageUrl: '', staffNotes: '', quantity: 4, isAccessory: false },
       { category: 'gates', name: 'Sliding Gate (Motorized)', spec: 'Galvanized steel, Motor included', price: '₦650,000', description: 'Automated sliding gate with remote control.', availability: 'in-stock', imageUrl: '', staffNotes: '', quantity: 3, isAccessory: false },
       { category: 'ceilings', name: 'PVC Ceiling Panels (Plain)', spec: 'Per sqm, White, Easy install', price: '₦3,500', description: 'Clean white PVC ceiling panels.', availability: 'in-stock', imageUrl: '', staffNotes: '', quantity: 100, isAccessory: false },
       { category: 'lighting', name: 'Crystal Chandelier (Small)', spec: 'K9 crystal, 60cm, Chrome', price: '₦185,000', description: 'Classic K9 crystal chandelier.', availability: 'in-stock', imageUrl: '', staffNotes: '', quantity: 8, isAccessory: false },
-      { category: 'vases', name: 'Ceramic Flower Vase (Large)', spec: 'Handcrafted, 45cm, Gold trim', price: '₦45,000', description: 'Beautiful ceramic vase for flowers.', availability: 'in-stock', imageUrl: '', staffNotes: '', quantity: 5, isAccessory: false },
-      { category: 'sculptures', name: 'African Sculpture (Wood)', spec: 'Hand-carved, 60cm, Ebony finish', price: '₦65,000', description: 'Traditional African wood sculpture.', availability: 'in-stock', imageUrl: '', staffNotes: '', quantity: 2, isAccessory: true },
-      { category: 'solar', name: 'Solar Inverter (5kVA)', spec: 'Pure sine wave, 48V, LCD display', price: '₦1,200,000', description: 'High-efficiency solar inverter.', availability: 'in-stock', imageUrl: '', staffNotes: '', quantity: 4, isAccessory: false },
-      { category: 'solar', name: 'Solar Panel (550W Mono)', spec: 'PERC, 144 cells, 25-year warranty', price: '₦185,000', description: 'High-efficiency monocrystalline panel.', availability: 'in-stock', imageUrl: '', staffNotes: '', quantity: 20, isAccessory: false },
+      { category: 'walldecor', name: 'Ceramic Flower Vase (Large)', spec: 'Handcrafted, 45cm, Gold trim', price: '₦45,000', description: 'Beautiful ceramic vase for flowers.', availability: 'in-stock', imageUrl: '', staffNotes: '', quantity: 5, isAccessory: false },
+      { category: 'walldecor', name: 'African Sculpture (Wood)', spec: 'Hand-carved, 60cm, Ebony finish', price: '₦65,000', description: 'Traditional African wood sculpture.', availability: 'in-stock', imageUrl: '', staffNotes: '', quantity: 2, isAccessory: true },
+      { category: 'rugs', name: 'Luxury Turkish Area Rug', spec: '200x300cm, High pile, Premium wool', price: '₦120,000', description: 'Plush Turkish design rug perfect for living rooms.', availability: 'in-stock', imageUrl: '', staffNotes: 'Available in cream and gray', quantity: 6, isAccessory: false },
     ];
 
     try {
@@ -124,24 +182,22 @@ export default function GoodsHub() {
   };
 
   const filteredProducts = products.filter(p => {
+    const mappedCat = getMappedCategory(p.category);
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || 
-                          p.category.toLowerCase().includes(search.toLowerCase());
-    const matchesCategory = categoryFilter === 'all' || p.category === categoryFilter;
+                          mappedCat.toLowerCase().includes(search.toLowerCase());
+    const matchesCategory = categoryFilter === 'all' || mappedCat === categoryFilter;
     const matchesAccessory = !showAccessories || p.isAccessory === true;
     return matchesSearch && matchesCategory && matchesAccessory;
   });
 
   const categories = [
-    { id: 'furniture', name: 'Furniture', icon: '🛋️', count: products.filter(p => p.category === 'furniture').length },
-    { id: 'doors', name: 'Security Doors', icon: '🚪', count: products.filter(p => p.category === 'doors').length },
-    { id: 'gates', name: 'Gates', icon: '🔒', count: products.filter(p => p.category === 'gates').length },
-    { id: 'ceilings', name: 'Ceilings', icon: '⬜', count: products.filter(p => p.category === 'ceilings').length },
-    { id: 'lighting', name: 'Lighting', icon: '🏮', count: products.filter(p => p.category === 'lighting').length },
-    { id: 'vases', name: 'Flower Vases', icon: '🌸', count: products.filter(p => p.category === 'vases').length },
-    { id: 'walldecor', name: 'Wall Décor & Art', icon: '🪞', count: products.filter(p => p.category === 'walldecor').length },
-    { id: 'frames', name: 'Picture Frames', icon: '🖼️', count: products.filter(p => p.category === 'frames').length },
-    { id: 'solar', name: 'Solar Solutions', icon: '☀️', count: products.filter(p => p.category === 'solar').length },
-    { id: 'sculptures', name: 'Sculptures & Art Objects', icon: '🏺', count: products.filter(p => p.category === 'sculptures').length },
+    { id: 'furniture', name: 'Turkey Furniture', icon: '🛋️', count: products.filter(p => getMappedCategory(p.category) === 'furniture').length },
+    { id: 'doors', name: 'Security Doors', icon: '🚪', count: products.filter(p => getMappedCategory(p.category) === 'doors').length },
+    { id: 'gates', name: 'Gates', icon: '🔒', count: products.filter(p => getMappedCategory(p.category) === 'gates').length },
+    { id: 'ceilings', name: 'Ceilings', icon: '⬜', count: products.filter(p => getMappedCategory(p.category) === 'ceilings').length },
+    { id: 'lighting', name: 'Chandeliers & Lighting', icon: '🏮', count: products.filter(p => getMappedCategory(p.category) === 'lighting').length },
+    { id: 'rugs', name: 'Rugs', icon: '🧶', count: products.filter(p => getMappedCategory(p.category) === 'rugs').length },
+    { id: 'walldecor', name: 'Wall Décor & Art', icon: '🪞', count: products.filter(p => getMappedCategory(p.category) === 'walldecor').length },
   ];
 
   return (
@@ -151,7 +207,29 @@ export default function GoodsHub() {
           <ShoppingBag className="w-8 h-8 text-amber-500" />
           <h2 className="text-2xl font-black text-amber-500 tracking-tight">Goods Hub</h2>
         </div>
+        {setView && (
+          <button 
+            onClick={() => setView('client')}
+            className="px-4 py-2.5 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded-xl text-xs font-bold text-neutral-300 hover:text-white transition-colors flex items-center gap-2"
+          >
+            ← Back to Orb Front
+          </button>
+        )}
       </div>
+
+      {showGuide && (
+        <div className="bg-amber-500/15 border border-amber-500/30 text-neutral-200 px-4 py-3.5 rounded-2xl text-sm font-semibold flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top duration-300 shadow-lg shadow-amber-500/5">
+          <div className="flex items-center gap-2.5">
+            <span className="text-lg">💡</span>
+            <span>
+              Tap <strong className="text-amber-500">'Back to Categories'</strong> to keep browsing. Tap <strong className="text-amber-500">'Back to Jotra World'</strong> to leave and return to the main Jotra app.
+            </span>
+          </div>
+          <button onClick={dismissGuide} className="text-neutral-400 hover:text-white font-black p-1">
+            ✕
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-20 text-neutral-500">Loading products...</div>
@@ -187,6 +265,14 @@ export default function GoodsHub() {
             >
               <ArrowLeft className="w-4 h-4" /> Back to Categories
             </button>
+            {setView && (
+              <button 
+                onClick={() => setView('client')}
+                className="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors"
+              >
+                ← Back to Orb Front
+              </button>
+            )}
             
             <div className="relative flex-1 min-w-[200px]">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
@@ -204,16 +290,13 @@ export default function GoodsHub() {
               className="bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-amber-500 text-neutral-100 min-w-[150px]"
             >
               <option value="all">All Categories</option>
+              <option value="furniture">🛋️ Turkey Furniture</option>
               <option value="doors">🚪 Security Doors</option>
               <option value="gates">🔒 Gates</option>
               <option value="ceilings">⬜ Ceilings</option>
-              <option value="furniture">🛋️ Furniture</option>
-              <option value="lighting">🏮 Lighting</option>
-              <option value="vases">🌸 Flower Vases</option>
+              <option value="lighting">🏮 Chandeliers & Lighting</option>
+              <option value="rugs">🧶 Rugs</option>
               <option value="walldecor">🪞 Wall Décor & Art</option>
-              <option value="frames">🖼️ Picture Frames</option>
-              <option value="solar">☀️ Solar Solutions</option>
-              <option value="sculptures">🏺 Sculptures & Art Objects</option>
             </select>
             
             <label className="flex items-center gap-2 text-neutral-300 text-sm font-bold cursor-pointer bg-neutral-800 border border-neutral-700 px-4 py-2.5 rounded-xl hover:bg-neutral-700 transition-colors">
@@ -364,16 +447,13 @@ export default function GoodsHub() {
                   <div>
                     <label className="block text-xs font-bold text-neutral-600 mb-1">Category</label>
                     <select value={editingProduct.category} onChange={e => setEditingProduct({...editingProduct, category: e.target.value})} className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2.5 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 focus:outline-none text-neutral-900 transition-all appearance-none">
-                      <option value="furniture">Furniture</option>
+                      <option value="furniture">Turkey Furniture</option>
                       <option value="doors">Security Doors</option>
                       <option value="gates">Gates</option>
                       <option value="ceilings">Ceilings</option>
-                      <option value="lighting">Lighting</option>
-                      <option value="vases">Flower Vases</option>
+                      <option value="lighting">Chandeliers & Lighting</option>
+                      <option value="rugs">Rugs</option>
                       <option value="walldecor">Wall Décor & Art</option>
-                      <option value="frames">Picture Frames</option>
-                      <option value="solar">Solar Solutions</option>
-                      <option value="sculptures">Sculptures & Art Objects</option>
                     </select>
                   </div>
                   <div>
@@ -438,8 +518,11 @@ export default function GoodsHub() {
                         input.onchange = (e: any) => {
                           const file = e.target.files?.[0];
                           if (file) {
-                            const previewUrl = URL.createObjectURL(file);
-                            setEditingProduct({ ...editingProduct, _previewImage: previewUrl, _newImageFile: file } as any);
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              setEditingProduct({ ...editingProduct, _previewImage: reader.result as string, _newImageFile: file } as any);
+                            };
+                            reader.readAsDataURL(file);
                           }
                         };
                         input.click();
@@ -540,7 +623,7 @@ export default function GoodsHub() {
                   onClick={() => setViewingProduct(null)}
                   className="flex-1 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 text-neutral-900 font-bold py-3 rounded-xl transition-colors"
                 >
-                  Close
+                  ← Back to Categories
                 </button>
               </div>
             </div>

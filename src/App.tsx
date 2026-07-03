@@ -76,7 +76,9 @@ export default function App() {
       <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans flex flex-col">
         <header className="bg-white border-b border-neutral-200 p-4 sticky top-0 z-10">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <h1 className="text-2xl font-black tracking-tight text-neutral-900">JOTRA</h1>
+            <button className="text-sm text-neutral-600 hover:text-neutral-900 font-black flex items-center gap-2">
+              ← Back to Jotra World
+            </button>
             <nav className="hidden md:flex gap-6 font-bold text-sm text-neutral-500">
               <a href="#" className="text-neutral-900">Showroom</a>
               <a href="#" className="hover:text-neutral-900">Compare</a>
@@ -91,23 +93,77 @@ export default function App() {
 
         <main className="flex-1 flex flex-col items-center justify-center p-8 text-center">
           <div className="max-w-3xl mx-auto space-y-8">
-            <h2 className="text-5xl md:text-7xl font-black tracking-tighter leading-tight">
-              Premium Doors, Ceilings & Interiors.
+            <h2 className="text-5xl md:text-7xl font-black tracking-tighter leading-tight text-neutral-900">
+              Premium Furnishings, Doors, Ceilings, Gates & Interiors.
             </h2>
             <p className="text-xl text-neutral-500 max-w-xl mx-auto">
-              Welcome to the public-facing Jotra App. Clients can browse the showroom, request quotes, and manage their carts here.
+              Browse Jotra's full collection, get instant price estimates, and request your quote — all in one place.
             </p>
             
-            <div className="pt-12 border-t border-neutral-200 mt-12">
-              <p className="text-sm font-bold text-neutral-400 mb-6 uppercase tracking-widest">Staff Access</p>
+            {/* ENTER THE ORB BUTTON - Visible immediately, high-contrast, bold */}
+            <div className="pt-4 pb-8 flex justify-center">
               <button 
                 onClick={handleEnterOrb}
-                className="group relative inline-flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-br from-amber-400 to-amber-600 text-neutral-950 font-black rounded-2xl overflow-hidden shadow-2xl hover:scale-105 transition-all"
+                className="group relative inline-flex items-center justify-center gap-4 px-10 py-5 bg-amber-500 hover:bg-amber-400 text-neutral-950 text-lg font-black rounded-2xl shadow-[0_10px_30px_rgba(245,158,11,0.3)] hover:shadow-[0_15px_40px_rgba(245,158,11,0.5)] transition-all transform hover:-translate-y-1 hover:scale-105"
               >
-                <div className="absolute inset-0 bg-white/20 group-hover:bg-transparent transition-colors"></div>
                 <Hexagon className="w-6 h-6 fill-neutral-950" />
                 <span>ENTER THE ORB</span>
               </button>
+            </div>
+
+            {/* STAFF ACCESS & CHANNELS CARD SECTION - Placed below Enter the Orb */}
+            <div className="pt-12 border-t border-neutral-200 mt-12 grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto text-left">
+              {/* Staff Access Card */}
+              <div className="bg-white border border-neutral-200 rounded-3xl p-6 flex flex-col justify-between shadow-sm">
+                <div>
+                  <p className="text-xs font-black text-neutral-400 uppercase tracking-widest mb-2">Staff Access</p>
+                  <p className="text-sm text-neutral-500 mb-6">
+                    Authorized staff can manage showroom products, log task reports, upload gallery visuals, and monitor warehouse inventories.
+                  </p>
+                </div>
+                <button 
+                  onClick={() => {
+                    setPendingView('portal');
+                    setShowLogin(true);
+                    setLoginError('');
+                    setEmail('admin@jotra.com');
+                    setPin('0000');
+                  }}
+                  className="w-full py-3.5 bg-neutral-900 hover:bg-neutral-800 text-white font-black rounded-xl text-xs tracking-wider transition-all border border-neutral-800 flex items-center justify-center gap-2"
+                >
+                  <Lock className="w-3.5 h-3.5" /> STAFF ACCESS
+                </button>
+              </div>
+
+              {/* Jotra Channels Card */}
+              <div className="bg-white border border-neutral-200 rounded-3xl p-6 flex flex-col justify-between shadow-sm">
+                <div>
+                  <p className="text-xs font-black text-neutral-400 uppercase tracking-widest mb-2">Jotra Channels</p>
+                  <p className="text-sm text-neutral-500 mb-6">
+                    Connect directly with Jotra Interiors representatives. Get custom design consults, request active catalogs, and ask inquiries.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <a 
+                    href="https://wa.me/2348000000000" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    referrerPolicy="no-referrer" 
+                    className="py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl text-xs tracking-wider transition-all flex items-center justify-center gap-2 text-center shadow-md shadow-emerald-500/10"
+                  >
+                    💬 WHATSAPP
+                  </a>
+                  <a 
+                    href="https://facebook.com/jotrainteriors" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    referrerPolicy="no-referrer" 
+                    className="py-3 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-xl text-xs tracking-wider transition-all flex items-center justify-center gap-2 text-center shadow-md shadow-blue-500/10"
+                  >
+                    🔵 FACEBOOK
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
         </main>
@@ -164,19 +220,11 @@ export default function App() {
           </button>
           
           <div className="flex gap-3">
-            {view !== 'portal' && (
-              <button
-                onClick={() => setView('portal')}
-                className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded-full text-xs font-bold transition-colors text-neutral-300 hover:text-white"
-              >
-                Back to Portal
-              </button>
-            )}
             <button
               onClick={() => setView('client')}
               className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded-full text-xs font-bold transition-colors text-neutral-300 hover:text-white"
             >
-              Exit Orb
+              ← Back to Orb Front
             </button>
             <button
               onClick={handleLogout}
@@ -206,7 +254,7 @@ export default function App() {
         )}
         {view === 'repair' && <RepairDashboard />}
         {view === 'staff' && <StaffDashboard />}
-        {view === 'goods' && <GoodsHub />}
+        {view === 'goods' && <GoodsHub setView={setView} />}
         {view === 'warehouse' && <WarehouseDashboard />}
         {view === 'display' && <DisplayFloor />}
         {view === 'photos' && <PhotoGallery />}
