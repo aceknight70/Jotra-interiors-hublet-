@@ -47,6 +47,8 @@ export interface Product {
   description: string;
   availability: string;
   imageUrl: string;
+  brand?: string;
+  productCode?: string;
   quantity?: number;
   warehouse?: string;
   staffNotes?: string;

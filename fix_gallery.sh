@@ -1,3 +1,4 @@
+cat << 'INNER_EOF' > src/components/PhotoGallery.tsx
 import React, { useState, useEffect } from 'react';
 import { uploadToSupabase, uploadOrConvertToBase64 } from '../utils/upload';
 import { GalleryPhoto } from '../types';
@@ -7,6 +8,7 @@ import { subscribeToGallery, saveGalleryPhoto, deleteGalleryPhoto, supabase } fr
 export default function PhotoGallery() {
   const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [usingFallback, setUsingFallback] = useState(false);
   
   // Upload modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -65,18 +67,13 @@ export default function PhotoGallery() {
       };
 
       await saveGalleryPhoto(newPhoto);
-      setPhotos(prev => {
-        const exists = prev.some(p => p.id === photoId);
-        if (exists) return prev;
-        return [newPhoto, ...prev];
-      });
       
       setShowUploadModal(false);
       setUploadFile(null);
       setUploadPreview('');
       setUploadName('');
     } catch (err: any) {
-      console.error('Upload error', err?.message || JSON.stringify(err));
+      console.error('Upload error', err);
       setUploadError(err.message || 'Failed to upload image. Please try again.');
     } finally {
       setIsUploading(false);
@@ -129,6 +126,12 @@ export default function PhotoGallery() {
           Add Photo
         </button>
       </div>
+
+      {usingFallback && (
+        <div className="bg-amber-500/10 border border-amber-500/20 text-amber-500 px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-2">
+          <span>⚠️ Using local storage fallback. Check your database connection.</span>
+        </div>
+      )}
 
       {/* Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -341,3 +344,5 @@ export default function PhotoGallery() {
     </div>
   );
 }
+INNER_EOF
+sh fix_gallery.sh

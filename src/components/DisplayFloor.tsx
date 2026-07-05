@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { Product } from '../types';
 import { LayoutDashboard, Maximize2 } from 'lucide-react';
-import { handleFirestoreError, OperationType } from '../utils/firebaseError';
+import { subscribeToProducts } from '../supabase';
 
 export default function DisplayFloor() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -29,15 +27,9 @@ export default function DisplayFloor() {
   };
 
   useEffect(() => {
-    const q = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const prodData = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product));
+    const unsubscribe = subscribeToProducts((prodData) => {
       setProducts(prodData);
       setLoading(false);
-    }, (error) => {
-      console.error('Error fetching products:', error);
-      setLoading(false);
-      handleFirestoreError(error, OperationType.GET, 'products');
     });
     return () => unsubscribe();
   }, []);

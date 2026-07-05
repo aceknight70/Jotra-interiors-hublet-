@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { db } from '../firebase';
-import { collection, onSnapshot, doc, updateDoc, setDoc, query, orderBy, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { uploadOrConvertToBase64 } from '../utils/upload';
 import { Product } from '../types';
 import { Search, Upload, Plus, Package, ShoppingBag, X, Edit2, Save, Camera, ArrowLeft, Grid } from 'lucide-react';
-import { handleFirestoreError, OperationType } from '../utils/firebaseError';
+import { subscribeToProducts, saveProduct, saveProductsBulk } from '../supabase';
 
 export default function GoodsHub({ setView }: { setView?: (v: string) => void }) {
   const [products, setProducts] = useState<Product[]>([]);
@@ -19,6 +17,8 @@ export default function GoodsHub({ setView }: { setView?: (v: string) => void })
   const [uploadingIds, setUploadingIds] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+
+  const [uploadMessage, setUploadMessage] = useState<{id: string, text: string, type: 'error' | 'success'} | null>(null);
 
   const getMappedCategory = (cat: string) => {
     const lower = (cat || '').toLowerCase().trim();
@@ -35,10 +35,8 @@ export default function GoodsHub({ setView }: { setView?: (v: string) => void })
   };
 
   useEffect(() => {
-    const q = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      let prodData = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product));
-      
+    const unsubscribe = subscribeToProducts((prodData) => {
+      let productsList = [...prodData];
       const categoriesToCheck = ['furniture', 'doors', 'gates', 'ceilings', 'lighting', 'rugs', 'walldecor'];
       const fallbackProducts: Product[] = [
         { id: 'fb-furniture', category: 'furniture', name: '3-Seater Sofa (Turkish)', spec: 'Fabric, Hardwood frame, 3+2+1 sets', price: '₦850,000', description: 'Premium Turkish sofa in durable fabric.', availability: 'in-stock', imageUrl: '', staffNotes: 'Available in 5 colours.', quantity: 5, isAccessory: false, createdAt: null },
@@ -51,19 +49,15 @@ export default function GoodsHub({ setView }: { setView?: (v: string) => void })
       ];
 
       categoriesToCheck.forEach(cat => {
-        const exists = prodData.some(p => getMappedCategory(p.category) === cat);
+        const exists = productsList.some(p => getMappedCategory(p.category) === cat);
         if (!exists) {
           const fb = fallbackProducts.find(f => f.category === cat);
-          if (fb) prodData.push(fb);
+          if (fb) productsList.push(fb);
         }
       });
 
-      setProducts(prodData);
+      setProducts(productsList);
       setLoading(false);
-    }, (error) => {
-      console.error('Error fetching products:', error);
-      setLoading(false);
-      handleFirestoreError(error, OperationType.GET, 'products');
     });
     return () => unsubscribe();
   }, []);
@@ -93,14 +87,31 @@ export default function GoodsHub({ setView }: { setView?: (v: string) => void })
 
   const handlePhotoUpload = async (productId: string, file: File) => {
     setUploadingIds(prev => ({ ...prev, [productId]: true }));
+    setUploadMessage(null);
+    const tempUrl = URL.createObjectURL(file);
+    
+    // Optimistically update the product with the temporary URL
+    setProducts(prev => prev.map(p => p.id === productId ? { ...p, imageUrl: tempUrl } : p));
+    
+    // Also update viewing/editing product if they are open
+    setViewingProduct(prev => prev?.id === productId ? { ...prev, imageUrl: tempUrl } : prev);
+    
     try {
-      const url = await uploadOrConvertToBase64(file, `products/${productId}/${Date.now()}_${file.name}`);
-      await updateDoc(doc(db, 'products', productId), { imageUrl: url, lastUpdated: serverTimestamp() });
-    } catch (err) {
-      console.error('Upload failed:', err);
-      handleFirestoreError(err, OperationType.UPDATE, `products/${productId}`);
+      const { uploadToSupabase } = await import('../utils/upload');
+      const url = await uploadToSupabase(file);
+      const existing = products.find(p => p.id === productId);
+      if (existing) {
+        await saveProduct({ ...existing, imageUrl: url });
+      }
+      setUploadMessage({ id: productId, text: 'Photo saved', type: 'success' });
+      setTimeout(() => setUploadMessage(null), 3000);
+    } catch (err: any) {
+      console.error('Upload failed:', err?.message || JSON.stringify(err));
+      setUploadMessage({ id: productId, text: err.message || 'Upload failed', type: 'error' });
+      setTimeout(() => setUploadMessage(null), 5000);
     } finally {
       setUploadingIds(prev => ({ ...prev, [productId]: false }));
+      // URL.revokeObjectURL(tempUrl); // Optional, let browser clean it up
     }
   };
 
@@ -124,28 +135,21 @@ export default function GoodsHub({ setView }: { setView?: (v: string) => void })
       const file = (editingProduct as any)._newImageFile;
       
       if (file) {
-        imageUrl = await uploadOrConvertToBase64(file, `products/${editingProduct.id}/${Date.now()}_${file.name}`);
+        const { uploadToSupabase } = await import('../utils/upload');
+        imageUrl = await uploadToSupabase(file);
       }
 
-      const { id, createdAt, lastUpdated, _previewImage, _newImageFile, ...productData } = editingProduct as any;
+      const { _previewImage, _newImageFile, ...productData } = editingProduct as any;
 
-      // Clean undefined fields to avoid Firestore errors
-      const cleanedData: any = {};
-      Object.keys(productData).forEach(key => {
-        if (productData[key] !== undefined) {
-          cleanedData[key] = productData[key];
-        }
+      await saveProduct({
+        ...productData,
+        imageUrl
       });
-
-      await updateDoc(doc(db, 'products', editingProduct.id), {
-        ...cleanedData,
-        imageUrl,
-        lastUpdated: serverTimestamp()
-      });
+      setProducts(prev => prev.map(p => p.id === productData.id ? { ...productData, imageUrl } : p));
       setEditingProduct(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to update product', err);
-      handleFirestoreError(err, OperationType.UPDATE, `products/${editingProduct.id}`);
+      alert('Failed to update product: ' + (err.message || 'Unknown error'));
     } finally {
       setSaving(false);
     }
@@ -167,15 +171,16 @@ export default function GoodsHub({ setView }: { setView?: (v: string) => void })
 
     try {
       setImporting(true);
-      const batch = writeBatch(db);
-      demo.forEach(p => {
-        const docRef = doc(collection(db, 'products'));
-        batch.set(docRef, { ...p, createdAt: serverTimestamp(), lastUpdated: serverTimestamp() });
-      });
-      await batch.commit();
+      const demoWithIds = demo.map((p, idx) => ({
+        ...p,
+        id: 'demo_' + Date.now() + '_' + idx,
+        createdAt: new Date().toISOString()
+      })) as Product[];
+      
+      await saveProductsBulk(demoWithIds);
+      setProducts(prev => [...demoWithIds, ...prev]);
     } catch (err) {
       console.error('Failed to add demo products', err);
-      handleFirestoreError(err, OperationType.WRITE, 'products');
     } finally {
       setImporting(false);
     }
@@ -348,18 +353,29 @@ export default function GoodsHub({ setView }: { setView?: (v: string) => void })
                         <span className="tracking-wide">Uploading...</span>
                       </div>
                     )}
+
+                    {uploadMessage && uploadMessage.id === p.id && (
+                      <div className={`absolute top-4 left-4 right-4 p-2 text-xs font-bold text-center rounded-lg shadow-md z-20 ${uploadMessage.type === 'success' ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'}`}>
+                        {uploadMessage.text}
+                      </div>
+                    )}
                     
                     {/* Upload Button */}
                     <button 
                       onClick={() => triggerUpload(p.id)}
                       disabled={!!uploadingIds[p.id]}
-                      className="absolute bottom-4 right-4 bg-amber-400 hover:bg-amber-500 text-neutral-950 p-2.5 rounded-full shadow-lg border-2 border-white transition-colors z-10 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="absolute bottom-4 right-4 bg-amber-400 hover:bg-amber-500 text-neutral-950 px-3 py-1.5 rounded-lg shadow-lg border-2 border-white transition-colors z-10 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 text-xs font-bold"
                       title="Upload Photo"
                     >
                       {uploadingIds[p.id] ? (
-                        <div className="w-5 h-5 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin"></div>
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin"></div>
+                          Uploading...
+                        </>
                       ) : (
-                        <Camera className="w-5 h-5" />
+                        <>
+                          <Camera className="w-3.5 h-3.5" /> Upload Photo
+                        </>
                       )}
                     </button>
 
@@ -422,6 +438,19 @@ export default function GoodsHub({ setView }: { setView?: (v: string) => void })
         </div>
       )}
 
+      {/* Fixed Back Button for Modals */}
+      {(editingProduct || viewingProduct) && (
+        <button
+          onClick={() => {
+            setEditingProduct(null);
+            setViewingProduct(null);
+          }}
+          className="fixed top-4 left-4 z-[2000] bg-neutral-900/80 hover:bg-neutral-900 text-white px-4 py-2 rounded-full font-bold text-sm shadow-xl backdrop-blur-sm flex items-center gap-2 border border-white/10 transition-all"
+        >
+          <ArrowLeft className="w-4 h-4" /> Back
+        </button>
+      )}
+
       {/* Edit Modal */}
       {editingProduct && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[1000] flex items-center justify-center p-4 overflow-y-auto">
@@ -459,6 +488,17 @@ export default function GoodsHub({ setView }: { setView?: (v: string) => void })
                   <div>
                     <label className="block text-xs font-bold text-neutral-600 mb-1">Price</label>
                     <input type="text" value={editingProduct.price} onChange={e => setEditingProduct({...editingProduct, price: e.target.value})} className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2.5 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 focus:outline-none text-neutral-900 transition-all" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-neutral-600 mb-1">Brand</label>
+                    <input type="text" value={editingProduct.brand || ''} onChange={e => setEditingProduct({...editingProduct, brand: e.target.value})} className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2.5 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 focus:outline-none text-neutral-900 transition-all" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-neutral-600 mb-1">Product Code</label>
+                    <input type="text" value={editingProduct.productCode || ''} onChange={e => setEditingProduct({...editingProduct, productCode: e.target.value})} className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2.5 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 focus:outline-none text-neutral-900 transition-all" />
                   </div>
                 </div>
 
@@ -600,6 +640,21 @@ export default function GoodsHub({ setView }: { setView?: (v: string) => void })
               <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-100">
                 <div className="font-bold text-sm text-neutral-900 mb-1">Specifications</div>
                 <div className="text-sm text-neutral-600">{viewingProduct.spec || 'No specifications provided.'}</div>
+                
+                <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div>
+                    <span className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-0.5">Brand</span>
+                    <span className="text-sm font-semibold text-neutral-900">{viewingProduct.brand || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-0.5">Product Code</span>
+                    <span className="text-sm font-semibold text-neutral-900">{viewingProduct.productCode || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-0.5">Stock Status</span>
+                    <span className="text-sm font-semibold text-neutral-900">{viewingProduct.availability || '-'}</span>
+                  </div>
+                </div>
               </div>
               
               <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-100">

@@ -43,14 +43,10 @@ export default function App() {
   const handleLogin = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const staff = getStaff();
-    const found = staff.find(s => s.email === email);
+    const found = staff.find(s => s.pin === pin);
     
     if (!found) {
-      setLoginError('Email not found.');
-      return;
-    }
-    if (found.pin !== pin) {
-      setLoginError('Wrong PIN.');
+      setLoginError('Incorrect PIN.');
       return;
     }
     
@@ -179,19 +175,11 @@ export default function App() {
               </div>
               <form onSubmit={handleLogin} className="flex flex-col gap-4">
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Staff email"
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-3 text-sm focus:border-amber-500 focus:outline-none text-white"
-                  required
-                />
-                <input
                   type="password"
                   value={pin}
                   onChange={(e) => setPin(e.target.value)}
                   placeholder="PIN"
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-3 text-sm focus:border-amber-500 focus:outline-none text-white"
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-3 text-sm focus:border-amber-500 focus:outline-none text-white text-center tracking-[0.5em] text-lg font-mono"
                   required
                 />
                 {loginError && <div className="text-red-500 text-xs font-bold text-center">{loginError}</div>}

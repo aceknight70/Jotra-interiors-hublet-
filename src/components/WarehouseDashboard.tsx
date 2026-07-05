@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, onSnapshot, doc, updateDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { Product } from '../types';
 import { Box, Search, AlertCircle } from 'lucide-react';
-import { handleFirestoreError, OperationType } from '../utils/firebaseError';
+import { subscribeToProducts, saveProduct } from '../supabase';
 
 export default function WarehouseDashboard() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -11,28 +9,22 @@ export default function WarehouseDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const q = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const prodData = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product));
+    const unsubscribe = subscribeToProducts((prodData) => {
       setProducts(prodData);
       setLoading(false);
-    }, (error) => {
-      console.error('Error fetching warehouse products:', error);
-      setLoading(false);
-      handleFirestoreError(error, OperationType.GET, 'products');
     });
     return () => unsubscribe();
   }, []);
 
   const updateQuantity = async (id: string, newQty: number) => {
     try {
-      await updateDoc(doc(db, 'products', id), { 
-        quantity: newQty, 
-        lastUpdated: serverTimestamp() 
-      });
+      const existing = products.find(p => p.id === id);
+      if (existing) {
+        const updated = { ...existing, quantity: newQty };
+        await saveProduct(updated);
+      }
     } catch (err) {
       console.error('Failed to update quantity', err);
-      handleFirestoreError(err, OperationType.UPDATE, `products/${id}`);
     }
   };
 

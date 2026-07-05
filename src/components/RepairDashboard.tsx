@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getTickets, saveTickets, getStaff } from '../store';
 import { RepairTicket, StaffMember, TicketStatus } from '../types';
-import { Search, Plus, X, Wrench, PlayCircle, CheckCircle2, RefreshCw, Trash2, AlertTriangle, Calendar, User, Clock } from 'lucide-react';
+import { Search, Plus, X, Wrench, PlayCircle, CheckCircle2, RefreshCw, Trash2, AlertTriangle, Calendar, User, Clock, ArrowLeft } from 'lucide-react';
 
 export default function RepairDashboard() {
   const [tickets, setTickets] = useState<RepairTicket[]>([]);
@@ -359,6 +359,18 @@ export default function RepairDashboard() {
           })
         )}
       </div>
+
+      {/* Fixed Back Button for Modals */}
+      {resolvingTicket && (
+        <button
+          onClick={() => {
+            setResolvingTicket(null);
+          }}
+          className="fixed top-4 left-4 z-[2000] bg-neutral-900/80 hover:bg-neutral-900 text-white px-4 py-2 rounded-full font-bold text-sm shadow-xl backdrop-blur-sm flex items-center gap-2 border border-white/10 transition-all"
+        >
+          <ArrowLeft className="w-4 h-4" /> Back
+        </button>
+      )}
 
       {/* Resolution Modal */}
       {resolvingTicket && (

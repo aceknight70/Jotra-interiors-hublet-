@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, onSnapshot, doc, deleteDoc, setDoc, updateDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { Product } from '../types';
-import { ShieldAlert, Plus, Trash2, Package, CheckCircle2, AlertCircle, Camera, Edit2, X, Save, Database } from 'lucide-react';
-import { uploadOrConvertToBase64 } from '../utils/upload';
-import { handleFirestoreError, OperationType } from '../utils/firebaseError';
+import { ShieldAlert, Plus, Trash2, Package, CheckCircle2, AlertCircle, Camera, Edit2, X, Save, Database, ArrowLeft } from 'lucide-react';
+import { uploadToSupabase, uploadOrConvertToBase64 } from '../utils/upload';
+import { subscribeToProducts, saveProduct, deleteProduct as removeProduct, saveProductsBulk } from '../supabase';
 
 export default function StaffDashboard() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -27,14 +25,11 @@ export default function StaffDashboard() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [uploadingIds, setUploadingIds] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState<{id: string, text: string, type: 'error' | 'success'} | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
-      const prodData = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product));
+    const unsubscribe = subscribeToProducts((prodData) => {
       setProducts(prodData);
-    }, (error) => {
-      console.error('Error fetching products:', error);
-      handleFirestoreError(error, OperationType.GET, 'products');
     });
     return () => unsubscribe();
   }, []);
@@ -45,28 +40,34 @@ export default function StaffDashboard() {
     setSaving(true);
 
     try {
+      const photoId = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9);
       let imageUrl = '';
       const file = (form as any)._newImageFile;
-      
-      const newRef = doc(collection(db, 'products'));
 
       if (file) {
-        imageUrl = await uploadOrConvertToBase64(file, `products/${newRef.id}/${Date.now()}_${file.name}`);
+        imageUrl = await uploadToSupabase(file);
       }
 
       const { _previewImage, _newImageFile, ...productData } = form as any;
 
-      await setDoc(newRef, {
+      const newProduct: Product = {
         ...productData,
+        id: photoId,
         imageUrl,
-        createdAt: serverTimestamp(),
-        lastUpdated: serverTimestamp()
+        createdAt: new Date().toISOString()
+      };
+
+      await saveProduct(newProduct);
+      setProducts(prev => {
+        const exists = prev.some(p => p.id === newProduct.id);
+        if (exists) return prev;
+        return [newProduct, ...prev];
       });
       setShowForm(false);
       setForm({ name: '', category: 'furniture', price: '', spec: '', availability: 'in-stock', quantity: 0, staffNotes: '', isAccessory: false });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error adding product', err);
-      handleFirestoreError(err, OperationType.CREATE, 'products');
+      alert('Failed to add product: ' + (err.message || 'Unknown error'));
     } finally {
       setSaving(false);
     }
@@ -88,10 +89,11 @@ export default function StaffDashboard() {
     }
 
     try {
-      const promises = [];
+      const bulkProducts: Product[] = [];
       for (let i = 1; i <= bulkForm.count; i++) {
-        const newRef = doc(collection(db, 'products'));
-        promises.push(setDoc(newRef, {
+        const photoId = Date.now().toString() + '_' + i + '_' + Math.random().toString(36).substr(2, 5);
+        bulkProducts.push({
+          id: photoId,
           name: `${bulkForm.baseName} ${i}`,
           category: bulkForm.category,
           price: bulkForm.price || '₦0',
@@ -99,28 +101,34 @@ export default function StaffDashboard() {
           availability: bulkForm.availability,
           isAccessory: bulkForm.isAccessory,
           spec: '',
-          staffNotes: '',
-          createdAt: serverTimestamp(),
-          lastUpdated: serverTimestamp()
-        }));
+          description: '',
+          imageUrl: '',
+          createdAt: new Date().toISOString()
+        });
       }
-      await Promise.all(promises);
+      await saveProductsBulk(bulkProducts);
+      setProducts(prev => {
+        const newIds = new Set(bulkProducts.map(p => p.id));
+        const filtered = prev.filter(p => !newIds.has(p.id));
+        return [...bulkProducts, ...filtered];
+      });
       setShowForm(false);
       setBulkForm({ baseName: '', count: 10, category: 'furniture', price: '', quantity: 0, availability: 'in-stock', isAccessory: false });
       alert(`✅ Created ${bulkForm.count} products: ${bulkForm.baseName} 1 to ${bulkForm.baseName} ${bulkForm.count}`);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error adding products', err);
-      handleFirestoreError(err, OperationType.CREATE, 'products');
+      alert('Failed to add products: ' + (err.message || 'Unknown error'));
     }
   };
 
   const deleteProduct = async (id: string) => {
     if (!window.confirm('Delete this product permanently?')) return;
     try {
-      await deleteDoc(doc(db, 'products', id));
-    } catch (err) {
+      await removeProduct(id);
+      setProducts(prev => prev.filter(p => p.id !== id));
+    } catch (err: any) {
       console.error('Error deleting product', err);
-      handleFirestoreError(err, OperationType.DELETE, `products/${id}`);
+      alert('Failed to delete product: ' + (err.message || 'Unknown error'));
     }
   };
 
@@ -133,28 +141,20 @@ export default function StaffDashboard() {
       const file = (editingProduct as any)._newImageFile;
       
       if (file) {
-        imageUrl = await uploadOrConvertToBase64(file, `products/${editingProduct.id}/${Date.now()}_${file.name}`);
+        imageUrl = await uploadToSupabase(file);
       }
 
-      const { id, createdAt, lastUpdated, _previewImage, _newImageFile, ...productData } = editingProduct as any;
+      const { _previewImage, _newImageFile, ...productData } = editingProduct as any;
 
-      // Clean undefined fields to avoid Firestore errors
-      const cleanedData: any = {};
-      Object.keys(productData).forEach(key => {
-        if (productData[key] !== undefined) {
-          cleanedData[key] = productData[key];
-        }
+      await saveProduct({
+        ...productData,
+        imageUrl
       });
-
-      await updateDoc(doc(db, 'products', editingProduct.id), {
-        ...cleanedData,
-        imageUrl,
-        lastUpdated: serverTimestamp()
-      });
+      setProducts(prev => prev.map(p => p.id === productData.id ? { ...productData, imageUrl } : p));
       setEditingProduct(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to update product', err);
-      handleFirestoreError(err, OperationType.UPDATE, `products/${editingProduct.id}`);
+      alert('Failed to update product: ' + (err.message || 'Unknown error'));
     } finally {
       setSaving(false);
     }
@@ -172,7 +172,7 @@ export default function StaffDashboard() {
     const importedRows: any[] = [];
     
     try {
-      const batch = writeBatch(db);
+      const bulkProducts: Product[] = [];
       for (let i = 1; i < lines.length; i++) {
         const vals = lines[i].split(',').map(v => v.trim());
         const obj: any = {};
@@ -181,8 +181,10 @@ export default function StaffDashboard() {
         
         importedRows.push(obj);
         
-        const docRef = obj.id ? doc(db, 'products', obj.id) : doc(collection(db, 'products'));
-        batch.set(docRef, {
+        const productId = obj.id || (Date.now().toString() + '_' + i + '_' + Math.random().toString(36).substr(2, 5));
+        
+        bulkProducts.push({
+          id: productId,
           name: obj.name || 'Unnamed',
           category: obj.category || 'furniture',
           spec: obj.spec || '',
@@ -195,18 +197,23 @@ export default function StaffDashboard() {
           staffNotes: obj.staffNotes || '',
           roomScene: obj.roomScene || '',
           isAccessory: obj.isAccessory === 'true' || false,
-          createdAt: serverTimestamp(),
-          lastUpdated: serverTimestamp()
-        }, { merge: true });
+          createdAt: new Date().toISOString()
+        });
       }
-      await batch.commit();
+      
+      await saveProductsBulk(bulkProducts);
+      setProducts(prev => {
+        const newIds = new Set(bulkProducts.map(p => p.id));
+        const filtered = prev.filter(p => !newIds.has(p.id));
+        return [...bulkProducts, ...filtered];
+      });
       
       localStorage.setItem('jt_csv_data', JSON.stringify(importedRows));
       setCsvData(importedRows);
       alert(`Imported ${importedRows.length} products.`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Import error:', error);
-      handleFirestoreError(error, OperationType.WRITE, 'products');
+      alert('Failed to import products: ' + (error.message || 'Unknown error'));
     }
     
     if (e.target) e.target.value = '';
@@ -518,6 +525,12 @@ export default function StaffDashboard() {
                   <span className="tracking-wide">Uploading...</span>
                 </div>
               )}
+
+              {uploadMessage && uploadMessage.id === p.id && (
+                <div className={`absolute top-4 left-4 right-4 p-2 text-xs font-bold text-center rounded-lg shadow-md z-20 ${uploadMessage.type === 'success' ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'}`}>
+                  {uploadMessage.text}
+                </div>
+              )}
               
               {/* Upload Button */}
               <button 
@@ -529,13 +542,19 @@ export default function StaffDashboard() {
                     const file = e.target.files?.[0];
                     if (file) {
                       setUploadingIds(prev => ({ ...prev, [p.id]: true }));
+                      setUploadMessage(null);
+                      const tempUrl = URL.createObjectURL(file);
+                      setProducts(prev => prev.map(prod => prod.id === p.id ? { ...prod, imageUrl: tempUrl } : prod));
+                      setViewingProduct(prev => prev?.id === p.id ? { ...prev, imageUrl: tempUrl } : prev);
                       try {
-                        const { updateDoc, doc, serverTimestamp } = await import('firebase/firestore');
-                        const url = await uploadOrConvertToBase64(file, `products/${p.id}/${Date.now()}_${file.name}`);
-                        await updateDoc(doc(db, 'products', p.id), { imageUrl: url, lastUpdated: serverTimestamp() });
-                      } catch (err) {
-                        console.error('Upload failed:', err);
-                        handleFirestoreError(err, OperationType.UPDATE, `products/${p.id}`);
+                        const url = await uploadToSupabase(file);
+                        await saveProduct({ ...p, imageUrl: url });
+                        setUploadMessage({ id: p.id, text: 'Photo saved', type: 'success' });
+                        setTimeout(() => setUploadMessage(null), 3000);
+                      } catch (err: any) {
+                        console.error('Upload failed:', err?.message || JSON.stringify(err));
+                        setUploadMessage({ id: p.id, text: err.message || 'Upload failed', type: 'error' });
+                        setTimeout(() => setUploadMessage(null), 5000);
                       } finally {
                         setUploadingIds(prev => ({ ...prev, [p.id]: false }));
                       }
@@ -544,13 +563,18 @@ export default function StaffDashboard() {
                   input.click();
                 }}
                 disabled={!!uploadingIds[p.id]}
-                className="absolute bottom-4 right-4 bg-amber-400 hover:bg-amber-500 text-neutral-950 p-2.5 rounded-full shadow-lg border-2 border-white transition-colors z-10 disabled:opacity-50"
+                className="absolute bottom-4 right-4 bg-amber-400 hover:bg-amber-500 text-neutral-950 px-3 py-1.5 rounded-lg shadow-lg border-2 border-white transition-colors z-10 disabled:opacity-50 flex items-center gap-1.5 text-xs font-bold"
                 title="Upload Photo"
               >
                 {uploadingIds[p.id] ? (
-                  <div className="w-5 h-5 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin"></div>
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin"></div>
+                    Uploading...
+                  </>
                 ) : (
-                  <Camera className="w-5 h-5" />
+                  <>
+                    <Camera className="w-3.5 h-3.5" /> Upload Photo
+                  </>
                 )}
               </button>
 
@@ -619,6 +643,19 @@ export default function StaffDashboard() {
         <div className="text-center py-10 text-neutral-500 bg-neutral-900 border border-neutral-800 rounded-2xl">
           No products found. Add some above.
         </div>
+      )}
+
+      {/* Fixed Back Button for Modals */}
+      {(editingProduct || viewingProduct) && (
+        <button
+          onClick={() => {
+            setEditingProduct(null);
+            setViewingProduct(null);
+          }}
+          className="fixed top-4 left-4 z-[2000] bg-neutral-900/80 hover:bg-neutral-900 text-white px-4 py-2 rounded-full font-bold text-sm shadow-xl backdrop-blur-sm flex items-center gap-2 border border-white/10 transition-all"
+        >
+          <ArrowLeft className="w-4 h-4" /> Back
+        </button>
       )}
 
       {/* Edit Modal */}

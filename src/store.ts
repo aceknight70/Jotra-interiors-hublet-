@@ -25,5 +25,11 @@ export const initStore = () => {
 export const getTickets = (): RepairTicket[] => JSON.parse(localStorage.getItem('jt_repairs') || '[]');
 export const saveTickets = (tickets: RepairTicket[]) => localStorage.setItem('jt_repairs', JSON.stringify(tickets));
 
-export const getStaff = (): StaffMember[] => JSON.parse(localStorage.getItem('jt_staff') || '[]');
+export const getStaff = (): StaffMember[] => {
+  const staff = JSON.parse(localStorage.getItem('jt_staff') || '[]');
+  return staff.map((s: any) => ({
+    ...s,
+    pin: s.pin || (s.email === 'admin@jotra.com' ? '0000' : '1234')
+  }));
+};
 export const saveStaff = (staff: StaffMember[]) => localStorage.setItem('jt_staff', JSON.stringify(staff));
