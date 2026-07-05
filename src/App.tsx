@@ -7,7 +7,7 @@ import GoodsHub from './components/GoodsHub';
 import WarehouseDashboard from './components/WarehouseDashboard';
 import DisplayFloor from './components/DisplayFloor';
 import PhotoGallery from './components/PhotoGallery';
-import { Hexagon, LayoutTemplate, Sparkles, ShoppingBag, Lock, LogOut } from 'lucide-react';
+import { Hexagon, LayoutTemplate, Sparkles, ShoppingBag, Lock, LogOut, Wrench } from 'lucide-react';
 
 export default function App() {
   const [view, setViewState] = useState('client');
@@ -252,11 +252,11 @@ export default function App() {
           <div className="text-center py-32 max-w-md mx-auto">
             <div className="bg-neutral-900/50 backdrop-blur border border-amber-500/20 rounded-3xl p-8 shadow-2xl">
               <div className="w-16 h-16 bg-neutral-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Hexagon className="w-8 h-8 text-amber-500" />
+                <Wrench className="w-8 h-8 text-amber-500" />
               </div>
-              <h2 className="text-xl font-bold text-neutral-200">Module Pending</h2>
+              <h2 className="text-xl font-bold text-neutral-200">Under Construction</h2>
               <p className="text-neutral-500 mt-2 text-sm">
-                The <span className="text-amber-500 font-mono bg-amber-500/10 px-1.5 py-0.5 rounded">{view}</span> module is currently under development and not yet integrated into the Orb.
+                The <span className="text-amber-500 font-mono bg-amber-500/10 px-1.5 py-0.5 rounded">{view}</span> module is currently under development. Please check back later.
               </p>
               <button 
                 onClick={() => setView('portal')}

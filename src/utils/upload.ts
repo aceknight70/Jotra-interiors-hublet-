@@ -62,7 +62,7 @@ export const uploadToSupabase = async (file: File): Promise<string> => {
     const { data, error } = await supabase.storage
       .from('images')
       .upload(filePath, fileToUpload, {
-        upsert: true,
+        upsert: false,
         contentType: fileToUpload.type
       });
 
@@ -86,7 +86,7 @@ export const uploadOrConvertToBase64 = async (file: File, path: string): Promise
   const cleanPath = path.replace(/^\/+/, '');
   try {
     const { data, error } = await supabase.storage.from('images').upload(cleanPath, file, {
-      upsert: true,
+      upsert: false,
       contentType: file.type
     });
     

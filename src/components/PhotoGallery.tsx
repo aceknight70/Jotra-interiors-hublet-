@@ -65,11 +65,6 @@ export default function PhotoGallery() {
       };
 
       await saveGalleryPhoto(newPhoto);
-      setPhotos(prev => {
-        const exists = prev.some(p => p.id === photoId);
-        if (exists) return prev;
-        return [newPhoto, ...prev];
-      });
       
       setShowUploadModal(false);
       setUploadFile(null);

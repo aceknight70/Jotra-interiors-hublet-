@@ -58,11 +58,6 @@ export default function StaffDashboard() {
       };
 
       await saveProduct(newProduct);
-      setProducts(prev => {
-        const exists = prev.some(p => p.id === newProduct.id);
-        if (exists) return prev;
-        return [newProduct, ...prev];
-      });
       setShowForm(false);
       setForm({ name: '', category: 'furniture', price: '', spec: '', availability: 'in-stock', quantity: 0, staffNotes: '', isAccessory: false });
     } catch (err: any) {
@@ -107,11 +102,6 @@ export default function StaffDashboard() {
         });
       }
       await saveProductsBulk(bulkProducts);
-      setProducts(prev => {
-        const newIds = new Set(bulkProducts.map(p => p.id));
-        const filtered = prev.filter(p => !newIds.has(p.id));
-        return [...bulkProducts, ...filtered];
-      });
       setShowForm(false);
       setBulkForm({ baseName: '', count: 10, category: 'furniture', price: '', quantity: 0, availability: 'in-stock', isAccessory: false });
       alert(`✅ Created ${bulkForm.count} products: ${bulkForm.baseName} 1 to ${bulkForm.baseName} ${bulkForm.count}`);
@@ -125,7 +115,6 @@ export default function StaffDashboard() {
     if (!window.confirm('Delete this product permanently?')) return;
     try {
       await removeProduct(id);
-      setProducts(prev => prev.filter(p => p.id !== id));
     } catch (err: any) {
       console.error('Error deleting product', err);
       alert('Failed to delete product: ' + (err.message || 'Unknown error'));
@@ -146,11 +135,7 @@ export default function StaffDashboard() {
 
       const { _previewImage, _newImageFile, ...productData } = editingProduct as any;
 
-      await saveProduct({
-        ...productData,
-        imageUrl
-      });
-      setProducts(prev => prev.map(p => p.id === productData.id ? { ...productData, imageUrl } : p));
+      await saveProduct({ ...productData, imageUrl });
       setEditingProduct(null);
     } catch (err: any) {
       console.error('Failed to update product', err);
@@ -202,11 +187,6 @@ export default function StaffDashboard() {
       }
       
       await saveProductsBulk(bulkProducts);
-      setProducts(prev => {
-        const newIds = new Set(bulkProducts.map(p => p.id));
-        const filtered = prev.filter(p => !newIds.has(p.id));
-        return [...bulkProducts, ...filtered];
-      });
       
       localStorage.setItem('jt_csv_data', JSON.stringify(importedRows));
       setCsvData(importedRows);

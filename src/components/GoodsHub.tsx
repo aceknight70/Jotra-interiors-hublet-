@@ -178,7 +178,6 @@ export default function GoodsHub({ setView }: { setView?: (v: string) => void })
       })) as Product[];
       
       await saveProductsBulk(demoWithIds);
-      setProducts(prev => [...demoWithIds, ...prev]);
     } catch (err) {
       console.error('Failed to add demo products', err);
     } finally {

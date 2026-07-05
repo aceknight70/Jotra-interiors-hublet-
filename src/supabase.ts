@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { Product, GalleryPhoto } from './types';
 
-const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || '';
-const supabaseKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabaseKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || 'placeholder_key';
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -118,9 +118,8 @@ export function subscribeToProducts(callback: (products: Product[]) => void): ()
   };
 }
 
-export async function saveProduct(product: Product): Promise<void> {
-  const dbProduct = {
-    id: product.id,
+export async function saveProduct(product: Product): Promise<any> {
+  const dbProduct: any = {
     client_id: 'jotra',
     description_headline: product.name,
     category: product.category,
@@ -131,15 +130,36 @@ export async function saveProduct(product: Product): Promise<void> {
     front_image_url: product.imageUrl,
     staff_notes: product.staffNotes || '',
     brand: product.brand || '',
-    product_code: product.productCode || ''
+    product_code: product.productCode || `PRD-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
   };
 
-  const { error } = await supabase
-    .from('products')
-    .upsert(dbProduct);
+  const isNew = !product.id || String(product.id).includes('_') || String(product.id).startsWith('temp-');
+  let result;
 
-  if (error) handleSupabaseError(error, 'saving product');
+  try {
+    if (isNew) {
+      const { data, error } = await supabase
+        .from('products')
+        .insert(dbProduct)
+        .select();
+      if (error) handleSupabaseError(error, 'saving product');
+      result = data && data[0];
+    } else {
+      const { data, error } = await supabase
+        .from('products')
+        .update(dbProduct)
+        .eq('id', product.id)
+        .select();
+      if (error) handleSupabaseError(error, 'saving product');
+      result = data && data[0];
+    }
+    return result;
+  } catch (error) {
+    console.error('Error saving product:', error);
+    throw error;
+  }
 }
+
 
 export async function deleteProduct(id: string): Promise<void> {
   const { error } = await supabase
@@ -153,7 +173,6 @@ export async function deleteProduct(id: string): Promise<void> {
 
 export async function saveProductsBulk(products: Product[]): Promise<void> {
   const formattedProducts = products.map(product => ({
-    id: product.id,
     client_id: 'jotra',
     description_headline: product.name,
     category: product.category,
@@ -164,12 +183,12 @@ export async function saveProductsBulk(products: Product[]): Promise<void> {
     front_image_url: product.imageUrl,
     staff_notes: product.staffNotes || '',
     brand: product.brand || '',
-    product_code: product.productCode || ''
+    product_code: product.productCode || `PRD-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
   }));
 
   const { error } = await supabase
     .from('products')
-    .upsert(formattedProducts);
+    .insert(formattedProducts);
 
   if (error) handleSupabaseError(error, 'bulk saving products');
 }
@@ -267,21 +286,42 @@ export function subscribeToGallery(callback: (photos: GalleryPhoto[]) => void): 
   };
 }
 
-export async function saveGalleryPhoto(photo: GalleryPhoto): Promise<void> {
-  const dbPhoto = {
-    id: photo.id,
+export async function saveGalleryPhoto(photo: GalleryPhoto): Promise<any> {
+  const dbPhoto: any = {
     client_id: 'jotra',
     description_headline: photo.name,
     category: photo.category,
-    front_image_url: photo.imageUrl
+    front_image_url: photo.imageUrl,
+    product_code: `GAL-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
   };
 
-  const { error } = await supabase
-    .from('products')
-    .upsert(dbPhoto);
+  const isNew = !photo.id || String(photo.id).includes('_') || String(photo.id).startsWith('temp-');
+  let result;
 
-  if (error) handleSupabaseError(error, 'saving gallery photo');
+  try {
+    if (isNew) {
+      const { data, error } = await supabase
+        .from('products')
+        .insert(dbPhoto)
+        .select();
+      if (error) handleSupabaseError(error, 'saving gallery photo');
+      result = data && data[0];
+    } else {
+      const { data, error } = await supabase
+        .from('products')
+        .update(dbPhoto)
+        .eq('id', photo.id)
+        .select();
+      if (error) handleSupabaseError(error, 'saving gallery photo');
+      result = data && data[0];
+    }
+    return result;
+  } catch (error) {
+    console.error('Error saving gallery photo:', error);
+    throw error;
+  }
 }
+
 
 export async function deleteGalleryPhoto(id: string): Promise<void> {
   const { error } = await supabase
