@@ -4,6 +4,20 @@ import { Product } from '../types';
 import { Search, Upload, Plus, Package, ShoppingBag, X, Edit2, Save, Camera, ArrowLeft, Grid } from 'lucide-react';
 import { subscribeToProducts, saveProduct, saveProductsBulk } from '../supabase';
 
+const JotraWatermark = () => (
+  <svg viewBox="0 0 300 200" className="w-[70%] opacity-[0.85] drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)] pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 mix-blend-overlay" xmlns="http://www.w3.org/2000/svg">
+    <g transform="rotate(-12 150 100)" fill="rgba(255,255,255,0.95)" stroke="none">
+      <text x="150" y="70" fontFamily="Times New Roman, serif" fontSize="62" fontWeight="bold" textAnchor="middle" letterSpacing="3">JOTRA</text>
+      <text x="150" y="105" fontFamily="Arial, sans-serif" fontSize="16" textAnchor="middle" letterSpacing="12">INTERIOR</text>
+      <line x1="20" y1="125" x2="280" y2="125" stroke="rgba(255,255,255,0.95)" strokeWidth="3" />
+      <text x="150" y="185" fontFamily="Times New Roman, serif" fontSize="72" textAnchor="middle">J</text>
+      <path d="M 115 160 C 90 140, 50 160, 60 185 C 65 195, 85 195, 95 185 C 105 175, 100 160, 85 160 C 75 160, 70 170, 75 175" fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth="3" />
+      <path d="M 185 160 C 210 140, 250 160, 240 185 C 235 195, 215 195, 205 185 C 195 175, 200 160, 215 160 C 225 160, 230 170, 225 175" fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth="3" />
+      <circle cx="150" cy="195" r="4" fill="rgba(255,255,255,0.95)" />
+    </g>
+  </svg>
+);
+
 export default function GoodsHub({ setView }: { setView?: (v: string) => void }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
@@ -338,7 +352,10 @@ export default function GoodsHub({ setView }: { setView?: (v: string) => void })
                   {/* Image Area */}
                   <div className="relative aspect-square bg-neutral-100 border-b border-neutral-100">
                     {p.imageUrl ? (
-                      <img src={p.imageUrl} alt={p.name} className={`w-full h-full object-cover transition-opacity ${uploadingIds[p.id] ? 'opacity-30' : ''}`} />
+                      <>
+                        <img src={p.imageUrl} alt={p.name} className={`w-full h-full object-cover transition-opacity ${uploadingIds[p.id] ? 'opacity-30' : ''}`} />
+                        <JotraWatermark />
+                      </>
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center text-neutral-400 bg-neutral-50">
                         <Package className="w-10 h-10 mb-2 opacity-30" />
@@ -619,7 +636,10 @@ export default function GoodsHub({ setView }: { setView?: (v: string) => void })
             <div className="flex flex-col gap-4 mt-2">
               <div className="aspect-square bg-neutral-100 rounded-2xl overflow-hidden relative">
                 {viewingProduct.imageUrl ? (
-                  <img src={viewingProduct.imageUrl} alt={viewingProduct.name} className="w-full h-full object-cover" />
+                  <>
+                    <img src={viewingProduct.imageUrl} alt={viewingProduct.name} className="w-full h-full object-cover" />
+                    <JotraWatermark />
+                  </>
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center text-neutral-400 bg-neutral-50">
                     <Package className="w-12 h-12 mb-2 opacity-30" />
