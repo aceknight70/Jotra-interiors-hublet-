@@ -209,8 +209,8 @@ export default function GoodsHub({ setView }: { setView?: (v: string) => void })
   });
 
   const categories = [
-    { id: 'furniture', name: 'Turkey Furniture', icon: '🛋️', count: products.filter(p => getMappedCategory(p.category) === 'furniture').length },
     { id: 'doors', name: 'Security Doors', icon: '🚪', count: products.filter(p => getMappedCategory(p.category) === 'doors').length },
+    { id: 'furniture', name: 'Turkey Furniture', icon: '🛋️', count: products.filter(p => getMappedCategory(p.category) === 'furniture').length },
     { id: 'gates', name: 'Gates', icon: '🔒', count: products.filter(p => getMappedCategory(p.category) === 'gates').length },
     { id: 'ceilings', name: 'Ceilings', icon: '⬜', count: products.filter(p => getMappedCategory(p.category) === 'ceilings').length },
     { id: 'lighting', name: 'Chandeliers & Lighting', icon: '🏮', count: products.filter(p => getMappedCategory(p.category) === 'lighting').length },
@@ -308,8 +308,8 @@ export default function GoodsHub({ setView }: { setView?: (v: string) => void })
               className="bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-amber-500 text-neutral-100 min-w-[150px]"
             >
               <option value="all">All Categories</option>
-              <option value="furniture">🛋️ Turkey Furniture</option>
               <option value="doors">🚪 Security Doors</option>
+              <option value="furniture">🛋️ Turkey Furniture</option>
               <option value="gates">🔒 Gates</option>
               <option value="ceilings">⬜ Ceilings</option>
               <option value="lighting">🏮 Chandeliers & Lighting</option>
@@ -492,8 +492,8 @@ export default function GoodsHub({ setView }: { setView?: (v: string) => void })
                   <div>
                     <label className="block text-xs font-bold text-neutral-600 mb-1">Category</label>
                     <select value={editingProduct.category} onChange={e => setEditingProduct({...editingProduct, category: e.target.value})} className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2.5 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 focus:outline-none text-neutral-900 transition-all appearance-none">
-                      <option value="furniture">Turkey Furniture</option>
                       <option value="doors">Security Doors</option>
+                      <option value="furniture">Turkey Furniture</option>
                       <option value="gates">Gates</option>
                       <option value="ceilings">Ceilings</option>
                       <option value="lighting">Chandeliers & Lighting</option>

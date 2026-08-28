@@ -225,9 +225,9 @@ export default function RepairDashboard() {
                 <label className="block text-xs font-bold text-neutral-400 mb-1 uppercase">Category</label>
                 <select value={form.category} onChange={e => setForm({...form, category: e.target.value})} className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-4 py-2.5 text-sm focus:border-amber-500 focus:outline-none text-white">
                   <option value="doors">🚪 Security Doors</option>
+                  <option value="furniture">🛋️ Furniture</option>
                   <option value="gates">🔒 Gates</option>
                   <option value="ceilings">⬜ Ceilings</option>
-                  <option value="furniture">🛋️ Furniture</option>
                   <option value="lighting">🏮 Lighting</option>
                   <option value="vases">🌸 Flower Vases</option>
                   <option value="walldecor">🪞 Wall Décor & Art</option>

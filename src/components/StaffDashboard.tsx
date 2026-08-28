@@ -335,8 +335,8 @@ export default function StaffDashboard() {
               <div className="flex-1 min-w-[120px]">
                 <label className="block text-xs font-bold text-neutral-400 mb-1 uppercase">Category</label>
                 <select value={bulkForm.category} onChange={e => setBulkForm({...bulkForm, category: e.target.value})} className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-4 py-2 text-sm focus:border-amber-500 focus:outline-none text-white">
-                  <option value="furniture">Turkey Furniture</option>
                   <option value="doors">Security Doors</option>
+                  <option value="furniture">Turkey Furniture</option>
                   <option value="gates">Gates</option>
                   <option value="ceilings">Ceilings</option>
                   <option value="lighting">Chandeliers & Lighting</option>
@@ -382,8 +382,8 @@ export default function StaffDashboard() {
               <div>
                 <label className="block text-xs font-bold text-neutral-400 mb-1 uppercase">Category</label>
                 <select value={form.category} onChange={e => setForm({...form, category: e.target.value})} className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-4 py-2 text-sm focus:border-amber-500 focus:outline-none text-white">
-                  <option value="furniture">Turkey Furniture</option>
                   <option value="doors">Security Doors</option>
+                  <option value="furniture">Turkey Furniture</option>
                   <option value="gates">Gates</option>
                   <option value="ceilings">Ceilings</option>
                   <option value="lighting">Chandeliers & Lighting</option>
@@ -663,8 +663,8 @@ export default function StaffDashboard() {
                   <div>
                     <label className="block text-xs font-bold text-neutral-600 mb-1">Category</label>
                     <select value={editingProduct.category} onChange={e => setEditingProduct({...editingProduct, category: e.target.value})} className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2.5 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 focus:outline-none text-neutral-900 transition-all appearance-none">
-                      <option value="furniture">Turkey Furniture</option>
                       <option value="doors">Security Doors</option>
+                      <option value="furniture">Turkey Furniture</option>
                       <option value="gates">Gates</option>
                       <option value="ceilings">Ceilings</option>
                       <option value="lighting">Chandeliers & Lighting</option>

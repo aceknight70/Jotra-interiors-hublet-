@@ -6,10 +6,10 @@ import { subscribeToProducts } from '../supabase';
 export default function DisplayFloor() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState<string>('furniture');
+  const [selectedCategory, setSelectedCategory] = useState<string>('doors');
 
   const categoryOrder = [
-    'furniture', 'doors', 'gates', 'ceilings', 'lighting',
+    'doors', 'furniture', 'gates', 'ceilings', 'lighting',
     'vases', 'walldecor', 'frames', 'sculptures', 'solar'
   ];
 
