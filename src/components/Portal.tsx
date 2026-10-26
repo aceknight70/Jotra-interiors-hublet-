@@ -1,4 +1,4 @@
-import { Wrench, Users, ShoppingBag, LayoutDashboard, Calendar, BookOpen, Camera, Video, Receipt, Database, Box } from 'lucide-react';
+import { Wrench, Users, ShoppingBag, LayoutDashboard, Calendar, BookOpen, Camera, Video, Receipt, Database, Box, Handshake, Store } from 'lucide-react';
 
 export default function Portal({ 
   setView, 
@@ -14,6 +14,8 @@ export default function Portal({
   onLogoutClick: () => void;
 }) {
   const tiles = [
+    { id: 'hubtenant', icon: Store, label: 'HubTenant', sub: 'Resident Mini-Storefronts', highlightColor: 'border-emerald-500/50 hover:border-emerald-400 bg-emerald-950/20 text-emerald-400', restricted: false },
+    { id: 'hubally', icon: Handshake, label: 'HubAlly', sub: 'Verified Business Allies', highlightColor: 'border-blue-500/50 hover:border-blue-400 bg-blue-950/20 text-blue-400', restricted: false },
     { id: 'goods', icon: ShoppingBag, label: 'Goods Hub', sub: 'Inventory & Categories', restricted: false },
     { id: 'display', icon: LayoutDashboard, label: 'Display Floor', sub: 'Showroom overview', restricted: false },
     { id: 'seasonal', icon: Calendar, label: 'Seasonal', sub: 'Promotions & Events', restricted: false },
@@ -62,16 +64,28 @@ export default function Portal({
             key={tile.id}
             onClick={() => setView(tile.id)}
             className={`p-6 rounded-2xl bg-neutral-800 border transition-all flex flex-col items-center text-center gap-4 cursor-pointer hover:-translate-y-1 shadow-lg ${
-              tile.highlight 
+              (tile as any).highlightColor 
+                ? (tile as any).highlightColor
+                : tile.highlight 
                 ? 'border-amber-500/40 hover:border-amber-500/80 shadow-amber-500/5' 
                 : 'border-neutral-700 hover:border-neutral-500'
             } ${isLocked ? 'opacity-60' : ''}`}
           >
-            <div className={`p-4 rounded-full ${tile.highlight ? 'bg-amber-500/10' : 'bg-neutral-900'}`}>
-              <tile.icon className={`w-8 h-8 ${tile.highlight ? 'text-amber-500' : 'text-neutral-400'}`} />
+            <div className={`p-4 rounded-full ${
+              (tile as any).highlightColor ? 'bg-black/40' : tile.highlight ? 'bg-amber-500/10' : 'bg-neutral-900'
+            }`}>
+              <tile.icon className={`w-8 h-8 ${
+                tile.id === 'hubtenant' ? 'text-emerald-400' :
+                tile.id === 'hubally' ? 'text-blue-400' :
+                tile.highlight ? 'text-amber-500' : 'text-neutral-400'
+              }`} />
             </div>
             <div>
-              <h3 className={`font-bold flex items-center justify-center gap-2 ${tile.highlight ? 'text-amber-500' : 'text-neutral-100'}`}>
+              <h3 className={`font-bold flex items-center justify-center gap-2 ${
+                tile.id === 'hubtenant' ? 'text-emerald-400' :
+                tile.id === 'hubally' ? 'text-blue-400' :
+                tile.highlight ? 'text-amber-500' : 'text-neutral-100'
+              }`}>
                 {tile.label}
               </h3>
               <p className="text-xs text-neutral-400 mt-1">{tile.sub}</p>
