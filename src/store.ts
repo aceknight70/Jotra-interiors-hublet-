@@ -14,22 +14,50 @@ const DEMO_STAFF: StaffMember[] = [
 ];
 
 export const initStore = () => {
-  if (!localStorage.getItem('jt_repairs')) {
-    localStorage.setItem('jt_repairs', JSON.stringify(DEMO_TICKETS));
-  }
-  if (!localStorage.getItem('jt_staff')) {
-    localStorage.setItem('jt_staff', JSON.stringify(DEMO_STAFF));
+  try {
+    if (!localStorage.getItem('jt_repairs')) {
+      localStorage.setItem('jt_repairs', JSON.stringify(DEMO_TICKETS));
+    }
+    if (!localStorage.getItem('jt_staff')) {
+      localStorage.setItem('jt_staff', JSON.stringify(DEMO_STAFF));
+    }
+  } catch (err) {
+    console.warn('Storage access warning in initStore:', err);
   }
 };
 
-export const getTickets = (): RepairTicket[] => JSON.parse(localStorage.getItem('jt_repairs') || '[]');
-export const saveTickets = (tickets: RepairTicket[]) => localStorage.setItem('jt_repairs', JSON.stringify(tickets));
+export const getTickets = (): RepairTicket[] => {
+  try {
+    return JSON.parse(localStorage.getItem('jt_repairs') || '[]');
+  } catch {
+    return DEMO_TICKETS;
+  }
+};
+export const saveTickets = (tickets: RepairTicket[]) => {
+  try {
+    localStorage.setItem('jt_repairs', JSON.stringify(tickets));
+  } catch (err) {
+    console.warn('Failed to save tickets:', err);
+  }
+};
 
 export const getStaff = (): StaffMember[] => {
-  const staff = JSON.parse(localStorage.getItem('jt_staff') || '[]');
-  return staff.map((s: any) => ({
-    ...s,
-    pin: s.pin || (s.email === 'admin@jotra.com' ? '0000' : '1234')
-  }));
+  try {
+    const raw = localStorage.getItem('jt_staff');
+    const staff = raw ? JSON.parse(raw) : DEMO_STAFF;
+    return staff.map((s: any) => ({
+      ...s,
+      pin: s.pin || (s.email === 'admin@jotra.com' ? '0000' : '1234')
+    }));
+  } catch {
+    return DEMO_STAFF;
+  }
 };
-export const saveStaff = (staff: StaffMember[]) => localStorage.setItem('jt_staff', JSON.stringify(staff));
+export const saveStaff = (staff: StaffMember[]) => {
+  try {
+    localStorage.setItem('jt_staff', JSON.stringify(staff));
+  } catch (err) {
+    console.warn('Failed to save staff:', err);
+  }
+};
+

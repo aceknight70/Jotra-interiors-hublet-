@@ -364,7 +364,14 @@ export default function App() {
           <Portal 
             setView={setView} 
             isStaffLoggedIn={isStaffLoggedIn} 
-            staffUser={isStaffLoggedIn ? JSON.parse(localStorage.getItem('jt_staffUser') || 'null') : null}
+            staffUser={(() => {
+              if (!isStaffLoggedIn) return null;
+              try {
+                return JSON.parse(localStorage.getItem('jt_staffUser') || 'null');
+              } catch {
+                return null;
+              }
+            })()}
             onLoginClick={() => {
               setShowLogin(true);
               setLoginError('');
