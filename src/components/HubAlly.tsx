@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Handshake, ExternalLink, Phone, MessageSquare, Plus, Edit2, Trash2, 
   ArrowLeft, Search, CheckCircle, ShieldCheck, Share2, Upload, Lock,
-  Globe, AlertCircle, RefreshCw
+  Globe, AlertCircle, RefreshCw, Link2, Check
 } from 'lucide-react';
 import { 
   JotraAlly, fetchActiveAllies, fetchAllAllies, saveAlly, 
@@ -26,6 +26,8 @@ export default function HubAlly({ onBack, isStaffLoggedIn, highlightCode }: HubA
   const [editingAlly, setEditingAlly] = useState<Partial<JotraAlly> | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [linkModalAlly, setLinkModalAlly] = useState<JotraAlly | null>(null);
+  const [isLinkCopied, setIsLinkCopied] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -161,7 +163,7 @@ export default function HubAlly({ onBack, isStaffLoggedIn, highlightCode }: HubA
               <h2 className="text-2xl font-black text-white tracking-tight">HubAlly</h2>
             </div>
             <p className="text-neutral-400 text-sm mt-0.5">
-              Verified business allies, specialized partners and trusted local suppliers
+              Other businesses with digital storefronts connected to Jotra. Tap to visit them.
             </p>
           </div>
         </div>
@@ -345,11 +347,14 @@ export default function HubAlly({ onBack, isStaffLoggedIn, highlightCode }: HubA
                   <div className="text-base font-black text-white font-mono tracking-wider">{selectedAlly.referral_code}</div>
                 </div>
                 <button
-                  onClick={() => handleCopyLink(selectedAlly.referral_code || '')}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
+                  onClick={() => {
+                    setLinkModalAlly(selectedAlly);
+                    setIsLinkCopied(false);
+                  }}
+                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
                 >
-                  <Share2 className="w-3.5 h-3.5" />
-                  {copiedCode === selectedAlly.referral_code ? 'Copied Link!' : 'Share Link'}
+                  <Link2 className="w-3.5 h-3.5" />
+                  Get Link
                 </button>
               </div>
             )}
@@ -495,6 +500,17 @@ export default function HubAlly({ onBack, isStaffLoggedIn, highlightCode }: HubA
                       </td>
                       <td className="p-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => {
+                              setLinkModalAlly(ally);
+                              setIsLinkCopied(false);
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 font-bold text-xs transition-colors flex items-center gap-1"
+                            title="Get Shareable Link"
+                          >
+                            <Link2 className="w-3.5 h-3.5" />
+                            Get Link
+                          </button>
                           <button
                             onClick={() => setEditingAlly(ally)}
                             className="p-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors"
@@ -688,6 +704,96 @@ export default function HubAlly({ onBack, isStaffLoggedIn, highlightCode }: HubA
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* GET LINK PANEL / MODAL FOR ALLY */}
+      {linkModalAlly && (
+        <div 
+          className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => {
+            setLinkModalAlly(null);
+            setIsLinkCopied(false);
+          }}
+        >
+          <div 
+            className="bg-neutral-900 border border-blue-500/40 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative text-left text-white animate-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}
+          >
+            <button 
+              onClick={() => {
+                setLinkModalAlly(null);
+                setIsLinkCopied(false);
+              }}
+              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-700 flex items-center justify-center text-sm font-bold transition-colors"
+              title="Close"
+            >
+              ✕
+            </button>
+
+            <div className="flex items-center gap-3.5 mb-5">
+              <div className="w-12 h-12 rounded-2xl bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center flex-shrink-0 shadow-lg">
+                <Link2 className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-blue-400 px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20">
+                  Shareable Ally Link
+                </span>
+                <h3 className="text-xl font-black text-white mt-1 leading-tight">{linkModalAlly.ally_name}</h3>
+              </div>
+            </div>
+
+            <p className="text-xs text-neutral-300 mb-4 leading-relaxed">
+              Share this partner link with clients and customers. Traffic arriving through this link will attribute discovery directly to {linkModalAlly.ally_name}.
+            </p>
+
+            {/* Readable box: light text on dark panel, dark text on white box */}
+            <div className="mb-5">
+              <label className="block text-[11px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
+                Shareable Link
+              </label>
+              <div className="bg-white text-neutral-900 font-mono text-xs sm:text-sm px-4 py-3 rounded-xl break-all select-all border border-neutral-300 font-bold shadow-inner leading-relaxed">
+                {`${window.location.origin}/?ally=${encodeURIComponent(linkModalAlly.referral_code || '')}`}
+              </div>
+            </div>
+
+            {/* Action buttons: Copy link & Share on WhatsApp */}
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const url = `${window.location.origin}/?ally=${encodeURIComponent(linkModalAlly.referral_code || '')}`;
+                  navigator.clipboard.writeText(url);
+                  setIsLinkCopied(true);
+                  setTimeout(() => setIsLinkCopied(false), 2500);
+                }}
+                className={`py-3 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-md ${
+                  isLinkCopied 
+                    ? 'bg-blue-600 text-white shadow-blue-500/25 ring-2 ring-blue-400' 
+                    : 'bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-700 hover:border-neutral-600'
+                }`}
+              >
+                {isLinkCopied ? (
+                  <>
+                    <Check className="w-4 h-4 text-white" /> Copied ✓
+                  </>
+                ) : (
+                  <>
+                    <Share2 className="w-4 h-4 text-neutral-300" /> Copy link
+                  </>
+                )}
+              </button>
+
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(`Hello, here is your space on Jotra Interiors: ${window.location.origin}/?ally=${encodeURIComponent(linkModalAlly.referral_code || '')}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-1.5 text-center"
+              >
+                <MessageSquare className="w-4 h-4 flex-shrink-0" /> Share on WhatsApp
+              </a>
+            </div>
           </div>
         </div>
       )}

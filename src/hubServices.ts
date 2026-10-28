@@ -282,15 +282,44 @@ export async function fetchAllTenants(): Promise<JotraTenant[]> {
 }
 
 export async function getTenantByCode(code: string): Promise<JotraTenant | null> {
-  const clean = code.trim().toUpperCase();
+  const clean = code.trim();
+  if (!clean) return null;
+
+  // 1. Try exact referral code match
   const { data, error } = await supabase
     .from('jotra_tenants')
     .select('*')
-    .ilike('referral_code', clean)
-    .single();
+    .ilike('referral_code', clean.toUpperCase())
+    .limit(1);
 
-  if (error || !data) return null;
-  return data as JotraTenant;
+  if (!error && data && data.length > 0) {
+    return data[0] as JotraTenant;
+  }
+
+  // 2. Try tenant name match (e.g. RueRack, Shed's RueRack)
+  const { data: nameMatches } = await supabase
+    .from('jotra_tenants')
+    .select('*')
+    .ilike('tenant_name', `%${clean}%`)
+    .limit(1);
+
+  if (nameMatches && nameMatches.length > 0) {
+    return nameMatches[0] as JotraTenant;
+  }
+
+  // 3. Fallback: RueRack alias to SHEDRACK01
+  if (clean.toUpperCase().includes('RUERACK')) {
+    const { data: ruerackMatch } = await supabase
+      .from('jotra_tenants')
+      .select('*')
+      .ilike('referral_code', 'SHEDRACK01')
+      .limit(1);
+    if (ruerackMatch && ruerackMatch.length > 0) {
+      return ruerackMatch[0] as JotraTenant;
+    }
+  }
+
+  return null;
 }
 
 export async function logTenantTraffic(tenantId: string, source: 'referral' | 'discovery'): Promise<void> {

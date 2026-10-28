@@ -167,44 +167,50 @@ export default function App() {
               Browse Jotra's full collection, get instant price estimates, and request your quote — all in one place.
             </p>
             
-            {/* HERO TILES SECTION: Jotra Orb + HubAlly (Blue) + HubTenant (Green) */}
-            <div className="pt-4 pb-8 flex flex-col md:flex-row items-stretch justify-center gap-4 max-w-3xl mx-auto w-full">
+            {/* HERO TILES SECTION: Jotra Orb with HubAlly (Blue) & HubTenant (Green) below it */}
+            <div className="pt-4 pb-8 flex flex-col items-center gap-3.5 max-w-2xl mx-auto w-full">
               {/* JOTRA ORB TILE */}
               <button 
                 onClick={handleEnterOrb}
-                className="group relative flex-1 inline-flex items-center justify-center gap-4 px-8 py-5 bg-amber-500 hover:bg-amber-400 text-neutral-950 text-lg font-black rounded-2xl shadow-[0_10px_30px_rgba(245,158,11,0.3)] hover:shadow-[0_15px_40px_rgba(245,158,11,0.5)] transition-all transform hover:-translate-y-1 hover:scale-[1.02]"
+                className="w-full group relative inline-flex items-center justify-center gap-4 px-8 py-5 bg-amber-500 hover:bg-amber-400 text-neutral-950 text-lg font-black rounded-2xl shadow-[0_10px_30px_rgba(245,158,11,0.3)] hover:shadow-[0_15px_40px_rgba(245,158,11,0.5)] transition-all transform hover:-translate-y-1 hover:scale-[1.01]"
               >
                 <Hexagon className="w-6 h-6 fill-neutral-950" />
                 <span>ENTER THE ORB</span>
               </button>
 
-              {/* TWO TILES SIDE BY SIDE: BLUE HubAlly & GREEN HubTenant */}
-              <div className="flex w-full md:w-auto gap-3">
+              {/* TWO TILES SIDE BY SIDE BELOW ENTER THE ORB: BLUE HubAlly & GREEN HubTenant */}
+              <div className="grid grid-cols-2 gap-3 w-full items-stretch">
                 {/* BLUE TILE: HubAlly */}
                 <button
                   onClick={() => setView('hubally')}
-                  className="flex-1 md:w-40 p-4 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white shadow-[0_8px_20px_rgba(37,99,235,0.25)] hover:shadow-[0_12px_28px_rgba(37,99,235,0.4)] transition-all transform hover:-translate-y-1 text-left flex flex-col justify-between border border-blue-400/40 cursor-pointer"
+                  className="p-4 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white shadow-[0_8px_20px_rgba(37,99,235,0.25)] hover:shadow-[0_12px_28px_rgba(37,99,235,0.4)] transition-all transform hover:-translate-y-1 text-left flex flex-col justify-between border border-blue-400/40 cursor-pointer h-full"
                 >
-                  <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center mb-2.5">
-                    <Handshake className="w-4 h-4 text-white" />
-                  </div>
                   <div>
+                    <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center mb-2">
+                      <Handshake className="w-4 h-4 text-white" />
+                    </div>
                     <span className="text-[10px] font-black tracking-widest uppercase opacity-80 block">Allies</span>
                     <span className="text-base font-black leading-tight block">HubAlly</span>
+                    <p className="text-xs text-white font-normal mt-1 leading-snug">
+                      Other businesses with digital storefronts connected to Jotra. Tap to visit them.
+                    </p>
                   </div>
                 </button>
 
                 {/* GREEN TILE: HubTenant */}
                 <button
                   onClick={() => setView('hubtenant')}
-                  className="flex-1 md:w-40 p-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_8px_20px_rgba(5,150,105,0.25)] hover:shadow-[0_12px_28px_rgba(5,150,105,0.4)] transition-all transform hover:-translate-y-1 text-left flex flex-col justify-between border border-emerald-400/40 cursor-pointer"
+                  className="p-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_8px_20px_rgba(5,150,105,0.25)] hover:shadow-[0_12px_28px_rgba(5,150,105,0.4)] transition-all transform hover:-translate-y-1 text-left flex flex-col justify-between border border-emerald-400/40 cursor-pointer h-full"
                 >
-                  <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center mb-2.5">
-                    <Store className="w-4 h-4 text-white" />
-                  </div>
                   <div>
+                    <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center mb-2">
+                      <Store className="w-4 h-4 text-white" />
+                    </div>
                     <span className="text-[10px] font-black tracking-widest uppercase opacity-80 block">Artisans</span>
                     <span className="text-base font-black leading-tight block">HubTenant</span>
+                    <p className="text-xs text-white font-normal mt-1 leading-snug">
+                      Independent youth businesses selling as tenants in Jotra's digital storefront.
+                    </p>
                   </div>
                 </button>
               </div>

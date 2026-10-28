@@ -3,7 +3,7 @@ import {
   Store, UserCheck, Phone, MessageSquare, Plus, Edit2, Trash2, 
   ArrowLeft, Search, CheckCircle, ShieldCheck, Share2, Upload, Lock,
   ShoppingBag, Image as ImageIcon, DollarSign, PackageCheck, AlertCircle,
-  Truck, Check, Clock, Eye, RefreshCw, KeyRound, ChevronRight, X
+  Truck, Check, Clock, Eye, RefreshCw, KeyRound, ChevronRight, X, Link2
 } from 'lucide-react';
 import { 
   JotraTenant, JotraTenantProduct, JotraTenantOrder, JotraTenantCommission,
@@ -114,6 +114,8 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
     logged_by_staff: 'Manager'
   });
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [linkModalTenant, setLinkModalTenant] = useState<JotraTenant | null>(null);
+  const [isLinkCopied, setIsLinkCopied] = useState(false);
 
   // Load Tenants list
   const loadTenants = async () => {
@@ -582,7 +584,7 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
             <p className="text-neutral-400 text-sm mt-0.5">
               {selectedTenant 
                 ? `${selectedTenant.tenant_name}'s Personal Space · ${selectedTenant.category || 'Artisan'}`
-                : 'Resident artisans, independent specialists and personal mini-storefronts'}
+                : "Independent youth businesses selling as tenants in Jotra's digital storefront."}
             </p>
           </div>
         </div>
@@ -777,11 +779,14 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
                   </a>
                 )}
                 <button
-                  onClick={() => handleCopyLink(selectedTenant.referral_code || '')}
-                  className="px-4 py-2.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-bold text-xs rounded-xl transition-all border border-neutral-700 flex items-center justify-center gap-2"
+                  onClick={() => {
+                    setLinkModalTenant(selectedTenant);
+                    setIsLinkCopied(false);
+                  }}
+                  className="px-4 py-2.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-bold text-xs rounded-xl transition-all border border-neutral-700 flex items-center justify-center gap-2"
                 >
-                  <Share2 className="w-3.5 h-3.5" />
-                  {copiedCode === selectedTenant.referral_code ? 'Copied Link!' : 'Share Storefront'}
+                  <Link2 className="w-3.5 h-3.5 text-emerald-400" />
+                  Get Link
                 </button>
               </div>
             </div>
@@ -1072,7 +1077,7 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
               ) : (
                 /* Authenticated Tenant Dashboard */
                 <div className="space-y-8">
-                  <div className="flex items-center justify-between bg-neutral-900 border border-neutral-800 px-6 py-4 rounded-2xl">
+                  <div className="flex items-center justify-between bg-neutral-900 border border-neutral-800 px-6 py-4 rounded-2xl flex-wrap gap-3">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
                         <CheckCircle className="w-6 h-6" />
@@ -1082,12 +1087,24 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
                         <div className="text-xs text-neutral-400">You can edit your gallery, products, and view private orders & earnings.</div>
                       </div>
                     </div>
-                    <button
-                      onClick={handleTenantLogout}
-                      className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white font-bold text-xs rounded-xl transition-colors"
-                    >
-                      Lock / Logout
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setLinkModalTenant(selectedTenant);
+                          setIsLinkCopied(false);
+                        }}
+                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center gap-1.5"
+                      >
+                        <Link2 className="w-3.5 h-3.5" />
+                        Get Link
+                      </button>
+                      <button
+                        onClick={handleTenantLogout}
+                        className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white font-bold text-xs rounded-xl transition-colors"
+                      >
+                        Lock / Logout
+                      </button>
+                    </div>
                   </div>
 
                   {/* Section A: Customer Orders for this Tenant */}
@@ -1653,6 +1670,17 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
                             <div className="flex items-center justify-end gap-2">
                               <button
                                 onClick={() => {
+                                  setLinkModalTenant(t);
+                                  setIsLinkCopied(false);
+                                }}
+                                className="px-2.5 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 font-bold text-xs transition-colors flex items-center gap-1"
+                                title="Get Shareable Link"
+                              >
+                                <Link2 className="w-3.5 h-3.5" />
+                                Get Link
+                              </button>
+                              <button
+                                onClick={() => {
                                   setResetPinTenant(t);
                                   setNewPinValue('');
                                 }}
@@ -2067,6 +2095,96 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* GET LINK PANEL / MODAL FOR TENANT */}
+      {linkModalTenant && (
+        <div 
+          className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => {
+            setLinkModalTenant(null);
+            setIsLinkCopied(false);
+          }}
+        >
+          <div 
+            className="bg-neutral-900 border border-emerald-500/40 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative text-left text-white animate-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}
+          >
+            <button 
+              onClick={() => {
+                setLinkModalTenant(null);
+                setIsLinkCopied(false);
+              }}
+              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-700 flex items-center justify-center text-sm font-bold transition-colors"
+              title="Close"
+            >
+              ✕
+            </button>
+
+            <div className="flex items-center gap-3.5 mb-5">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center flex-shrink-0 shadow-lg">
+                <Link2 className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                  Direct Tenant Storefront Link
+                </span>
+                <h3 className="text-xl font-black text-white mt-1 leading-tight">{linkModalTenant.tenant_name}</h3>
+              </div>
+            </div>
+
+            <p className="text-xs text-neutral-300 mb-4 leading-relaxed">
+              Customers opening this link will see the <strong className="text-white">&ldquo;Is this who you want to buy from?&rdquo;</strong> confirmation before entering {linkModalTenant.tenant_name}&apos;s space.
+            </p>
+
+            {/* Readable box: light text on dark panel, dark text on white box */}
+            <div className="mb-5">
+              <label className="block text-[11px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
+                Shareable Link
+              </label>
+              <div className="bg-white text-neutral-900 font-mono text-xs sm:text-sm px-4 py-3 rounded-xl break-all select-all border border-neutral-300 font-bold shadow-inner leading-relaxed">
+                {`${window.location.origin}/?tenant=${encodeURIComponent(linkModalTenant.referral_code)}`}
+              </div>
+            </div>
+
+            {/* Action buttons: Copy link & Share on WhatsApp */}
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const url = `${window.location.origin}/?tenant=${encodeURIComponent(linkModalTenant.referral_code)}`;
+                  navigator.clipboard.writeText(url);
+                  setIsLinkCopied(true);
+                  setTimeout(() => setIsLinkCopied(false), 2500);
+                }}
+                className={`py-3 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-md ${
+                  isLinkCopied 
+                    ? 'bg-emerald-500 text-white shadow-emerald-500/25 ring-2 ring-emerald-400' 
+                    : 'bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-700 hover:border-neutral-600'
+                }`}
+              >
+                {isLinkCopied ? (
+                  <>
+                    <Check className="w-4 h-4 text-white" /> Copied ✓
+                  </>
+                ) : (
+                  <>
+                    <Share2 className="w-4 h-4 text-neutral-300" /> Copy link
+                  </>
+                )}
+              </button>
+
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(`Hello, here is your space on Jotra Interiors: ${window.location.origin}/?tenant=${encodeURIComponent(linkModalTenant.referral_code)}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-1.5 text-center"
+              >
+                <MessageSquare className="w-4 h-4 flex-shrink-0" /> Share on WhatsApp
+              </a>
+            </div>
           </div>
         </div>
       )}
