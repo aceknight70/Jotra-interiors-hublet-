@@ -231,6 +231,35 @@ export async function deleteAlly(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function getAllyByCode(code: string): Promise<JotraAlly | null> {
+  const clean = (code || '').trim();
+  if (!clean) return null;
+
+  // 1. Try exact referral code match
+  const { data, error } = await supabase
+    .from('jotra_allies')
+    .select('*')
+    .ilike('referral_code', clean.toUpperCase())
+    .limit(1);
+
+  if (!error && data && data.length > 0) {
+    return data[0] as JotraAlly;
+  }
+
+  // 2. Try ally name match
+  const { data: nameMatches } = await supabase
+    .from('jotra_allies')
+    .select('*')
+    .ilike('ally_name', `%${clean}%`)
+    .limit(1);
+
+  if (nameMatches && nameMatches.length > 0) {
+    return nameMatches[0] as JotraAlly;
+  }
+
+  return null;
+}
+
 /**
  * HUBTENANT SERVICES
  */
@@ -635,12 +664,13 @@ export async function updateCommissionStatus(
 }
 
 /**
- * MASTER NOTIFICATIONS SERVICES
+ * MASTER NOTIFICATIONS & MANAGER SECURITY SERVICES
  */
 export async function fetchMasterNotifications(): Promise<JotraMasterNotification[]> {
   const { data, error } = await supabase
     .from('jotra_master_tenant_notifications')
     .select('*')
+    .neq('tenant_name', 'SYSTEM_MANAGER_SECURITY')
     .order('created_at', { ascending: false })
     .limit(50);
 
@@ -657,3 +687,59 @@ export async function markNotificationSeen(id: string): Promise<void> {
     .update({ seen: true })
     .eq('id', id);
 }
+
+/**
+ * MANAGER HUB PIN SECURITY
+ * Stored securely hashed (SHA-256) in jotra_master_tenant_notifications
+ * under tenant_name = 'SYSTEM_MANAGER_SECURITY'.
+ * Master sets and updates it. Never plain text. No default placeholder.
+ */
+export async function getManagerPinHash(): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from('jotra_master_tenant_notifications')
+      .select('event')
+      .eq('tenant_name', 'SYSTEM_MANAGER_SECURITY')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (error) {
+      console.error('Error fetching manager pin hash:', error);
+      return null;
+    }
+
+    if (data && data.length > 0) {
+      const ev = (data[0].event || '').trim();
+      if (ev.startsWith('MANAGER_PIN_HASH:')) {
+        return ev.replace('MANAGER_PIN_HASH:', '').trim();
+      }
+    }
+    return null;
+  } catch (err) {
+    console.error('Error getting manager pin hash:', err);
+    return null;
+  }
+}
+
+export async function setManagerPin(newPin: string): Promise<void> {
+  const cleanPin = (newPin || '').trim();
+  if (!cleanPin) {
+    throw new Error('Manager PIN cannot be empty.');
+  }
+  const hashed = await hashPin(cleanPin);
+  const { error } = await supabase
+    .from('jotra_master_tenant_notifications')
+    .insert({
+      tenant_id: null,
+      tenant_name: 'SYSTEM_MANAGER_SECURITY',
+      event: 'MANAGER_PIN_HASH:' + hashed,
+      by_role: 'master',
+      seen: true
+    });
+
+  if (error) {
+    console.error('Error saving manager PIN:', error);
+    throw new Error('Failed to save manager PIN: ' + error.message);
+  }
+}
+

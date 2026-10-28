@@ -12,7 +12,7 @@ import {
   fetchTenantProducts, saveTenantProduct, deleteTenantProduct, createTenantOrder,
   fetchTenantOrders, updateTenantOrderStatus, fetchTenantCommissions, fetchAllCommissions,
   recordCommission, updateCommissionStatus, fetchMasterNotifications, markNotificationSeen,
-  uploadTenantPhoto, hashPin
+  uploadTenantPhoto, hashPin, getManagerPinHash, setManagerPin
 } from '../hubServices';
 
 interface HubTenantProps {
@@ -20,7 +20,25 @@ interface HubTenantProps {
   isStaffLoggedIn?: boolean;
   initialCode?: string | null;
   onSetReferralBanner?: (tenant: JotraTenant | null) => void;
+  onGoToShowroom?: () => void;
+  isManagerAuthenticated?: boolean;
+  setIsManagerAuthenticated?: (v: boolean) => void;
 }
+
+// Public base URL setting for shareable links; falls back to window.location.origin if empty
+export const PUBLIC_BASE_URL = "https://jotra-interiors.hublet.cc";
+
+export const getTenantBaseUrl = () => {
+  const custom = (PUBLIC_BASE_URL || '').trim();
+  const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+  const rawBase = custom || origin;
+  return rawBase.replace(/\/+$/, '');
+};
+
+export const getTenantShareableLink = (code: string) => {
+  const base = getTenantBaseUrl();
+  return `${base}/?tenant=${encodeURIComponent(code || '')}`;
+};
 
 // 30 high-quality workshop & artisan placeholder visual templates
 const PLACEHOLDER_IMAGES = [
@@ -56,11 +74,20 @@ const PLACEHOLDER_IMAGES = [
   'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=600&q=80'  // Finished electrical box
 ];
 
-export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetReferralBanner }: HubTenantProps) {
+export default function HubTenant({ 
+  onBack, 
+  isStaffLoggedIn, 
+  initialCode, 
+  onSetReferralBanner,
+  onGoToShowroom,
+  isManagerAuthenticated,
+  setIsManagerAuthenticated
+}: HubTenantProps) {
   // Navigation & Tenant state
   const [tenants, setTenants] = useState<JotraTenant[]>([]);
   const [selectedTenant, setSelectedTenant] = useState<JotraTenant | null>(null);
   const [pendingConfirmationTenant, setPendingConfirmationTenant] = useState<{ tenant: JotraTenant; source: 'referral' | 'discovery' } | null>(null);
+  const [tenantNotFound, setTenantNotFound] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [enterCode, setEnterCode] = useState('');
@@ -96,9 +123,9 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [uploadingSlotIndex, setUploadingSlotIndex] = useState<number | null>(null);
 
-  // Manager Hub state
+  // Manager Hub state & PIN Security
   const [isManagerMode, setIsManagerMode] = useState(false);
-  const [managerTab, setManagerTab] = useState<'tenants' | 'commissions' | 'notifications'>('tenants');
+  const [managerTab, setManagerTab] = useState<'tenants' | 'commissions' | 'notifications' | 'master_settings'>('tenants');
   const [managerTenants, setManagerTenants] = useState<JotraTenant[]>([]);
   const [allCommissions, setAllCommissions] = useState<JotraTenantCommission[]>([]);
   const [notifications, setNotifications] = useState<JotraMasterNotification[]>([]);
@@ -117,6 +144,25 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
   const [linkModalTenant, setLinkModalTenant] = useState<JotraTenant | null>(null);
   const [isLinkCopied, setIsLinkCopied] = useState(false);
 
+  // Manager PIN Modal State
+  const [showManagerPinModal, setShowManagerPinModal] = useState(false);
+  const [managerPinInput, setManagerPinInput] = useState('');
+  const [managerPinError, setManagerPinError] = useState('');
+  const [managerPinAttempts, setManagerPinAttempts] = useState(0);
+  const [managerLockoutUntil, setManagerLockoutUntil] = useState<number | null>(null);
+  const [managerRemainingLockoutSecs, setManagerRemainingLockoutSecs] = useState(0);
+  const [storedManagerPinHash, setStoredManagerPinHash] = useState<string | null | undefined>(undefined);
+  const [checkingManagerPin, setCheckingManagerPin] = useState(false);
+
+  // Master Set / Change Manager PIN Modal State
+  const [showMasterChangePinModal, setShowMasterChangePinModal] = useState(false);
+  const [masterPinInput, setMasterPinInput] = useState('');
+  const [newManagerPinInput, setNewManagerPinInput] = useState('');
+  const [confirmNewManagerPinInput, setConfirmNewManagerPinInput] = useState('');
+  const [masterPinError, setMasterPinError] = useState('');
+  const [masterPinSuccess, setMasterPinSuccess] = useState('');
+  const [isSavingManagerPin, setIsSavingManagerPin] = useState(false);
+
   // Load Tenants list
   const loadTenants = async () => {
     setLoading(true);
@@ -129,6 +175,8 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
         const found = await getTenantByCode(initialCode);
         if (found) {
           setPendingConfirmationTenant({ tenant: found, source: 'referral' });
+        } else {
+          setTenantNotFound(initialCode);
         }
       }
 
@@ -162,6 +210,33 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
     }, 1000);
     return () => clearInterval(interval);
   }, [lockoutUntil]);
+
+  // Handle countdown for Manager Lockout
+  useEffect(() => {
+    if (!managerLockoutUntil) return;
+    const interval = setInterval(() => {
+      const diff = Math.ceil((managerLockoutUntil - Date.now()) / 1000);
+      if (diff <= 0) {
+        setManagerLockoutUntil(null);
+        setManagerPinAttempts(0);
+        setManagerPinError('');
+      } else {
+        setManagerRemainingLockoutSecs(diff);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [managerLockoutUntil]);
+
+  // Fetch current Manager PIN configuration when Manager PIN modal opens
+  useEffect(() => {
+    if (showManagerPinModal) {
+      setCheckingManagerPin(true);
+      getManagerPinHash().then(hash => {
+        setStoredManagerPinHash(hash);
+        setCheckingManagerPin(false);
+      });
+    }
+  }, [showManagerPinModal]);
 
   // Load space details when tenant is selected
   useEffect(() => {
@@ -197,6 +272,14 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
       setSelectedTenant(tenant);
       if (onSetReferralBanner && source === 'referral') {
         onSetReferralBanner(tenant);
+      }
+    } else {
+      if (source === 'referral') {
+        if (onGoToShowroom) {
+          onGoToShowroom();
+        } else if (onBack) {
+          onBack();
+        }
       }
     }
   };
@@ -364,18 +447,122 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
     }
   };
 
-  // Manager Hub actions
-  const openManagerHub = async () => {
-    setIsManagerMode(true);
-    setManagerTab('tenants');
-    const [fullTenants, commissions, notifs] = await Promise.all([
-      fetchAllTenants(),
-      fetchAllCommissions(),
-      fetchMasterNotifications()
-    ]);
-    setManagerTenants(fullTenants);
-    setAllCommissions(commissions);
-    setNotifications(notifs);
+  // Manager Hub actions & PIN protection
+  const handleOpenManagerHubClick = async () => {
+    if (isManagerAuthenticated) {
+      setIsManagerMode(true);
+      setManagerTab('tenants');
+      const [fullTenants, commissions, notifs] = await Promise.all([
+        fetchAllTenants(),
+        fetchAllCommissions(),
+        fetchMasterNotifications()
+      ]);
+      setManagerTenants(fullTenants);
+      setAllCommissions(commissions);
+      setNotifications(notifs);
+    } else {
+      setManagerPinInput('');
+      setManagerPinError('');
+      setShowManagerPinModal(true);
+    }
+  };
+
+  const handleLockManagerHub = () => {
+    setIsManagerMode(false);
+    if (setIsManagerAuthenticated) {
+      setIsManagerAuthenticated(false);
+    }
+  };
+
+  const handleManagerPinSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (managerLockoutUntil && Date.now() < managerLockoutUntil) {
+      setManagerPinError(`Manager Hub locked. Please wait ${managerRemainingLockoutSecs}s.`);
+      return;
+    }
+
+    if (!storedManagerPinHash) {
+      setManagerPinError('Master must set the Manager PIN first.');
+      return;
+    }
+
+    if (!managerPinInput.trim()) {
+      setManagerPinError('Please enter the Manager PIN.');
+      return;
+    }
+
+    const inputHash = await hashPin(managerPinInput.trim());
+    if (inputHash === storedManagerPinHash) {
+      // Session authenticated
+      if (setIsManagerAuthenticated) {
+        setIsManagerAuthenticated(true);
+      }
+      setShowManagerPinModal(false);
+      setIsManagerMode(true);
+      setManagerPinInput('');
+      setManagerPinError('');
+      setManagerPinAttempts(0);
+      const [fullTenants, commissions, notifs] = await Promise.all([
+        fetchAllTenants(),
+        fetchAllCommissions(),
+        fetchMasterNotifications()
+      ]);
+      setManagerTenants(fullTenants);
+      setAllCommissions(commissions);
+      setNotifications(notifs);
+    } else {
+      const next = managerPinAttempts + 1;
+      setManagerPinAttempts(next);
+      if (next >= 5) {
+        const lockUntil = Date.now() + 5 * 60 * 1000;
+        setManagerLockoutUntil(lockUntil);
+        setManagerRemainingLockoutSecs(300);
+        setManagerPinError('5 incorrect attempts. Manager Hub locked for 5 minutes.');
+      } else {
+        setManagerPinError(`Incorrect Manager PIN. ${5 - next} attempt(s) remaining.`);
+      }
+    }
+  };
+
+  const handleMasterChangePinSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMasterPinError('');
+    setMasterPinSuccess('');
+
+    // Check Master PIN (must match Master credentials: '0000' or active staff login)
+    if (!isStaffLoggedIn && masterPinInput.trim() !== '0000') {
+      setMasterPinError('Incorrect Master PIN.');
+      return;
+    }
+
+    if (!newManagerPinInput.trim() || newManagerPinInput.trim().length < 4) {
+      setMasterPinError('Manager PIN must be at least 4 digits.');
+      return;
+    }
+
+    if (newManagerPinInput.trim() !== confirmNewManagerPinInput.trim()) {
+      setMasterPinError('New PINs do not match.');
+      return;
+    }
+
+    setIsSavingManagerPin(true);
+    try {
+      await setManagerPin(newManagerPinInput.trim());
+      const newHash = await hashPin(newManagerPinInput.trim());
+      setStoredManagerPinHash(newHash);
+      setMasterPinSuccess('Manager PIN updated successfully! It is now active.');
+      setMasterPinInput('');
+      setNewManagerPinInput('');
+      setConfirmNewManagerPinInput('');
+      setTimeout(() => {
+        setShowMasterChangePinModal(false);
+        setMasterPinSuccess('');
+      }, 1500);
+    } catch (err: any) {
+      setMasterPinError('Failed to save Manager PIN: ' + err.message);
+    } finally {
+      setIsSavingManagerPin(false);
+    }
   };
 
   const handleSaveTenantManager = async (e: React.FormEvent) => {
@@ -462,8 +649,7 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
   };
 
   const handleCopyLink = (code: string) => {
-    const origin = window.location.origin;
-    const url = `${origin}?tenant=${encodeURIComponent(code)}`;
+    const url = getTenantShareableLink(code);
     navigator.clipboard.writeText(url);
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(null), 2500);
@@ -592,19 +778,31 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
         {/* Manager Mode Button & Refresh */}
         <div className="flex items-center gap-3">
           {isManagerMode ? (
-            <button
-              onClick={() => setIsManagerMode(false)}
-              className="px-4 py-2.5 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-200 text-xs font-bold rounded-xl transition-colors flex items-center gap-2"
-            >
-              ← Tenant View
-            </button>
+            <>
+              <button
+                onClick={handleLockManagerHub}
+                className="px-3.5 py-2.5 bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-400 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5"
+                title="Lock Manager Hub"
+              >
+                <Lock className="w-3.5 h-3.5" /> Lock
+              </button>
+              <button
+                onClick={() => setIsManagerMode(false)}
+                className="px-4 py-2.5 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-200 text-xs font-bold rounded-xl transition-colors flex items-center gap-2"
+              >
+                ← Tenant View
+              </button>
+            </>
           ) : (
-            <button
-              onClick={openManagerHub}
-              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-xl transition-all shadow-md shadow-emerald-600/20 flex items-center gap-2"
-            >
-              <ShieldCheck className="w-3.5 h-3.5" /> Manager Hub
-            </button>
+            /* Hide the Manager Hub button from tenants who are logged into their own space. Tenants must never see it. */
+            !isTenantAuthenticated && (
+              <button
+                onClick={handleOpenManagerHubClick}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-xl transition-all shadow-md shadow-emerald-600/20 flex items-center gap-2"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" /> Manager Hub
+              </button>
+            )
           )}
           <button
             onClick={loadTenants}
@@ -616,10 +814,40 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
         </div>
       </div>
 
+      {/* "This space was not found" message when opened with invalid ?tenant=CODE */}
+      {tenantNotFound && !selectedTenant && !isManagerMode && (
+        <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 max-w-md mx-auto text-center space-y-4 my-8 shadow-2xl animate-in fade-in duration-200">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center mx-auto mb-2">
+            <AlertCircle className="w-8 h-8" />
+          </div>
+          <h3 className="text-xl font-black text-white">This space was not found</h3>
+          <p className="text-xs text-neutral-400 leading-relaxed">
+            The resident storefront link you opened (<span className="text-amber-400 font-mono font-bold">{tenantNotFound}</span>) does not match any active tenant on Jotra Interiors.
+          </p>
+          <div className="pt-2 space-y-2.5">
+            <button
+              onClick={() => {
+                if (onGoToShowroom) onGoToShowroom();
+                else if (onBack) onBack();
+              }}
+              className="w-full py-3 px-4 bg-white hover:bg-neutral-100 text-neutral-950 font-black text-xs rounded-xl shadow-lg transition-all"
+            >
+              Go to Jotra Interiors Showroom →
+            </button>
+            <button
+              onClick={() => setTenantNotFound(null)}
+              className="w-full py-2.5 px-4 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-bold text-xs rounded-xl transition-colors"
+            >
+              Browse All Resident Tenants
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ========================================================================= */}
       {/* VIEW A: TENANT LIST & ENTER-BY-ID (Customer Hub View) */}
       {/* ========================================================================= */}
-      {!selectedTenant && !isManagerMode && (
+      {!selectedTenant && !isManagerMode && !tenantNotFound && (
         <div className="space-y-6">
           {/* Top Bar: Search & Enter by ID box */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -730,6 +958,32 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
       {/* ========================================================================= */}
       {selectedTenant && !isManagerMode && (
         <div className="space-y-6">
+          {/* GENTLE WAY INTO JOTRA INTERIORS SHOWROOM */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-neutral-900 border border-emerald-500/30 p-4 rounded-3xl shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
+                <Store className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-white">
+                  You are exploring {selectedTenant.tenant_name}&apos;s Storefront
+                </div>
+                <div className="text-[11px] text-neutral-400">
+                  Ready to browse Jotra&apos;s full furnishings, doors, ceilings & gates?
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                if (onGoToShowroom) onGoToShowroom();
+                else if (onBack) onBack();
+              }}
+              className="px-4 py-2.5 bg-white hover:bg-neutral-100 text-neutral-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 whitespace-nowrap"
+            >
+              Visit Jotra Interiors Showroom →
+            </button>
+          </div>
+
           {/* Tenant Space Header Card */}
           <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 md:p-8 shadow-xl">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -1586,6 +1840,14 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
               >
                 Master Notifs ({notifications.length})
               </button>
+              <button
+                onClick={() => setManagerTab('master_settings')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  managerTab === 'master_settings' ? 'bg-amber-600 text-white shadow-md' : 'bg-neutral-800 text-amber-400 hover:text-white'
+                }`}
+              >
+                <KeyRound className="w-3.5 h-3.5" /> Master Settings
+              </button>
             </div>
           </div>
 
@@ -1918,6 +2180,73 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
               )}
             </div>
           )}
+
+          {/* MANAGER TAB 4: MASTER SETTINGS & MANAGER PIN */}
+          {managerTab === 'master_settings' && (
+            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 md:p-8 shadow-xl space-y-6 animate-in fade-in duration-200">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
+                  <KeyRound className="w-7 h-7" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-black tracking-widest uppercase px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    Master Administration
+                  </span>
+                  <h4 className="text-xl font-black text-white mt-1">Manager Hub PIN & Access Security</h4>
+                  <p className="text-xs text-neutral-400 mt-0.5">
+                    Configure and change the Manager PIN. The PIN is stored hashed with SHA-256 and never in plain text.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                <div className="bg-neutral-800/60 border border-neutral-700/60 rounded-2xl p-5 flex flex-col justify-between space-y-4">
+                  <div>
+                    <div className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Manager PIN Protection</div>
+                    <div className="text-base font-black text-emerald-400 flex items-center gap-1.5 mt-1">
+                      <ShieldCheck className="w-5 h-5" /> Active & Protected
+                    </div>
+                    <p className="text-xs text-neutral-300 mt-2 leading-relaxed">
+                      Entering Manager Hub requires this private PIN. 5 consecutive incorrect attempts will automatically lock the hub for 5 minutes.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMasterPinError('');
+                      setMasterPinSuccess('');
+                      setMasterPinInput('');
+                      setNewManagerPinInput('');
+                      setConfirmNewManagerPinInput('');
+                      setShowMasterChangePinModal(true);
+                    }}
+                    className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black text-xs rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+                  >
+                    <KeyRound className="w-4 h-4" /> Change Manager PIN
+                  </button>
+                </div>
+
+                <div className="bg-neutral-800/60 border border-neutral-700/60 rounded-2xl p-5 flex flex-col justify-between space-y-4">
+                  <div>
+                    <div className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Lock Manager Hub</div>
+                    <div className="text-base font-black text-white flex items-center gap-1.5 mt-1">
+                      <Lock className="w-5 h-5 text-amber-400" /> Session Security
+                    </div>
+                    <p className="text-xs text-neutral-300 mt-2 leading-relaxed">
+                      This session will be terminated upon page refresh or closing. You can also explicitly lock the Manager Hub right now.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleLockManagerHub}
+                    className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-black text-xs rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+                  >
+                    <Lock className="w-4 h-4" /> Lock Manager Hub Now
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -2145,7 +2474,7 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
                 Shareable Link
               </label>
               <div className="bg-white text-neutral-900 font-mono text-xs sm:text-sm px-4 py-3 rounded-xl break-all select-all border border-neutral-300 font-bold shadow-inner leading-relaxed">
-                {`${window.location.origin}/?tenant=${encodeURIComponent(linkModalTenant.referral_code)}`}
+                {getTenantShareableLink(linkModalTenant.referral_code)}
               </div>
             </div>
 
@@ -2154,7 +2483,7 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
               <button
                 type="button"
                 onClick={() => {
-                  const url = `${window.location.origin}/?tenant=${encodeURIComponent(linkModalTenant.referral_code)}`;
+                  const url = getTenantShareableLink(linkModalTenant.referral_code);
                   navigator.clipboard.writeText(url);
                   setIsLinkCopied(true);
                   setTimeout(() => setIsLinkCopied(false), 2500);
@@ -2177,7 +2506,7 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
               </button>
 
               <a
-                href={`https://wa.me/?text=${encodeURIComponent(`Hello, here is your space on Jotra Interiors: ${window.location.origin}/?tenant=${encodeURIComponent(linkModalTenant.referral_code)}`)}`}
+                href={`https://wa.me/?text=${encodeURIComponent(`Hello, here is your space on Jotra Interiors: ${getTenantShareableLink(linkModalTenant.referral_code)}`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-1.5 text-center"
@@ -2185,6 +2514,229 @@ export default function HubTenant({ onBack, isStaffLoggedIn, initialCode, onSetR
                 <MessageSquare className="w-4 h-4 flex-shrink-0" /> Share on WhatsApp
               </a>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MANAGER HUB PIN ENTRY MODAL */}
+      {showManagerPinModal && (
+        <div 
+          className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setShowManagerPinModal(false)}
+        >
+          <div 
+            className="bg-neutral-900 border border-emerald-500/40 rounded-3xl max-w-sm w-full p-6 text-center shadow-2xl relative animate-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}
+          >
+            <button 
+              onClick={() => setShowManagerPinModal(false)}
+              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-neutral-800 text-neutral-400 hover:text-white flex items-center justify-center text-sm font-bold transition-colors"
+              title="Close"
+            >
+              ✕
+            </button>
+
+            <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center mx-auto mb-3 shadow-lg">
+              <ShieldCheck className="w-7 h-7" />
+            </div>
+
+            <h3 className="text-xl font-black text-white">Manager Hub</h3>
+            <p className="text-xs text-neutral-400 mt-1 mb-5">
+              Enter your private Manager PIN to unlock management controls, commissions and tenant settings.
+            </p>
+
+            {checkingManagerPin ? (
+              <div className="py-8 text-neutral-400 text-xs font-bold animate-pulse">
+                Verifying security configuration...
+              </div>
+            ) : storedManagerPinHash === null ? (
+              <div className="space-y-4">
+                <div className="p-4 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-2xl text-xs font-bold leading-relaxed">
+                  Master must set the Manager PIN first.
+                </div>
+                <p className="text-[11px] text-neutral-400">
+                  No Manager PIN has been configured yet. The Master Administrator must configure the initial PIN.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowManagerPinModal(false);
+                    setMasterPinError('');
+                    setMasterPinSuccess('');
+                    setMasterPinInput('');
+                    setNewManagerPinInput('');
+                    setConfirmNewManagerPinInput('');
+                    setShowMasterChangePinModal(true);
+                  }}
+                  className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black text-xs rounded-xl shadow-lg transition-all flex items-center justify-center gap-1.5"
+                >
+                  <KeyRound className="w-4 h-4" /> Master: Set Manager PIN
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleManagerPinSubmit} className="space-y-4">
+                {managerLockoutUntil && Date.now() < managerLockoutUntil ? (
+                  <div className="p-3 bg-red-500/20 border border-red-500/40 text-red-400 rounded-xl text-xs font-bold">
+                    Manager Hub locked for safety ({managerRemainingLockoutSecs}s remaining).
+                  </div>
+                ) : (
+                  <>
+                    <input 
+                      type="password"
+                      maxLength={10}
+                      autoFocus
+                      required
+                      value={managerPinInput}
+                      onChange={e => {
+                        setManagerPinInput(e.target.value);
+                        setManagerPinError('');
+                      }}
+                      placeholder="••••"
+                      className="w-40 mx-auto bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-3 text-center text-2xl tracking-[0.4em] font-mono text-white focus:outline-none focus:border-emerald-500 shadow-inner"
+                    />
+
+                    {managerPinError && (
+                      <div className="p-2.5 bg-red-500/15 border border-red-500/30 text-red-400 rounded-xl text-xs font-bold">
+                        {managerPinError}
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Lock className="w-4 h-4" /> Unlock Manager Hub
+                    </button>
+                  </>
+                )}
+
+                <div className="pt-2 border-t border-neutral-800">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowManagerPinModal(false);
+                      setMasterPinError('');
+                      setMasterPinSuccess('');
+                      setMasterPinInput('');
+                      setNewManagerPinInput('');
+                      setConfirmNewManagerPinInput('');
+                      setShowMasterChangePinModal(true);
+                    }}
+                    className="text-[11px] font-bold text-neutral-400 hover:text-amber-400 transition-colors flex items-center justify-center gap-1 mx-auto"
+                  >
+                    <KeyRound className="w-3 h-3" /> Master: Change Manager PIN
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* MASTER SET / CHANGE MANAGER PIN MODAL */}
+      {showMasterChangePinModal && (
+        <div 
+          className="fixed inset-0 z-[130] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setShowMasterChangePinModal(false)}
+        >
+          <div 
+            className="bg-neutral-900 border border-amber-500/40 rounded-3xl max-w-sm w-full p-6 text-center shadow-2xl relative animate-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}
+          >
+            <button 
+              onClick={() => setShowMasterChangePinModal(false)}
+              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-neutral-800 text-neutral-400 hover:text-white flex items-center justify-center text-sm font-bold transition-colors"
+              title="Close"
+            >
+              ✕
+            </button>
+
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center mx-auto mb-3 shadow-lg">
+              <KeyRound className="w-7 h-7" />
+            </div>
+
+            <h3 className="text-xl font-black text-white">Master PIN Control</h3>
+            <p className="text-xs text-neutral-400 mt-1 mb-5">
+              Set or update the Manager PIN. The PIN is stored hashed (SHA-256) and cannot be viewed in plain text.
+            </p>
+
+            <form onSubmit={handleMasterChangePinSubmit} className="space-y-3.5 text-left">
+              {!isStaffLoggedIn && (
+                <div>
+                  <label className="block text-[11px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
+                    Master PIN *
+                  </label>
+                  <input 
+                    type="password"
+                    maxLength={10}
+                    required
+                    value={masterPinInput}
+                    onChange={e => setMasterPinInput(e.target.value)}
+                    placeholder="Enter Master PIN"
+                    className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500 font-mono tracking-widest"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[11px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
+                  New Manager PIN (min 4 digits) *
+                </label>
+                <input 
+                  type="password"
+                  maxLength={10}
+                  required
+                  value={newManagerPinInput}
+                  onChange={e => setNewManagerPinInput(e.target.value)}
+                  placeholder="e.g. 5829"
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500 font-mono tracking-widest"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
+                  Confirm New Manager PIN *
+                </label>
+                <input 
+                  type="password"
+                  maxLength={10}
+                  required
+                  value={confirmNewManagerPinInput}
+                  onChange={e => setConfirmNewManagerPinInput(e.target.value)}
+                  placeholder="Confirm PIN"
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500 font-mono tracking-widest"
+                />
+              </div>
+
+              {masterPinError && (
+                <div className="p-2.5 bg-red-500/15 border border-red-500/30 text-red-400 rounded-xl text-xs font-bold text-center">
+                  {masterPinError}
+                </div>
+              )}
+
+              {masterPinSuccess && (
+                <div className="p-2.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 rounded-xl text-xs font-bold text-center">
+                  {masterPinSuccess}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowMasterChangePinModal(false)}
+                  className="py-2.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-bold text-xs rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingManagerPin}
+                  className="py-2.5 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
+                >
+                  {isSavingManagerPin ? 'Saving...' : 'Save PIN'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

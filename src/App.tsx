@@ -14,7 +14,22 @@ import { JotraTenant } from './hubServices';
 import { Hexagon, Lock, LogOut, Wrench, Handshake, Store, X } from 'lucide-react';
 
 export default function App() {
-  const [view, setViewState] = useState('client');
+  // Synchronous URL param check to skip landing page completely on ?tenant or ?ally
+  const [routeInfo] = useState(() => {
+    if (typeof window === 'undefined') return { view: 'client', ally: null, tenant: null };
+    const params = new URLSearchParams(window.location.search);
+    const ally = params.get('ally');
+    const tenant = params.get('tenant');
+    if (tenant) {
+      return { view: 'hubtenant', ally: null, tenant };
+    }
+    if (ally) {
+      return { view: 'hubally', ally, tenant: null };
+    }
+    return { view: 'client', ally: null, tenant: null };
+  });
+
+  const [view, setViewState] = useState<string>(routeInfo.view);
   const [isStaffLoggedIn, setIsStaffLoggedIn] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [pendingView, setPendingView] = useState('');
@@ -23,23 +38,26 @@ export default function App() {
   const [loginError, setLoginError] = useState('');
 
   // Referral tracking state
-  const [allyParamCode, setAllyParamCode] = useState<string | null>(null);
-  const [tenantParamCode, setTenantParamCode] = useState<string | null>(null);
+  const [allyParamCode, setAllyParamCode] = useState<string | null>(routeInfo.ally);
+  const [tenantParamCode, setTenantParamCode] = useState<string | null>(routeInfo.tenant);
   const [activeReferralTenant, setActiveReferralTenant] = useState<JotraTenant | null>(null);
+
+  // Session-only Manager Authentication state (resets on refresh, close, or explicit lock)
+  const [isManagerAuthenticated, setIsManagerAuthenticated] = useState<boolean>(false);
 
   useEffect(() => {
     initStore();
     const stored = localStorage.getItem('jt_staffUser');
     if (stored) setIsStaffLoggedIn(true);
 
-    // Parse URL parameters ?ally=CODE and ?tenant=CODE
+    // Dynamic param update if changed post-mount
     const params = new URLSearchParams(window.location.search);
     const ally = params.get('ally');
     const tenant = params.get('tenant');
-    if (ally) {
+    if (ally && ally !== allyParamCode) {
       setAllyParamCode(ally);
       setViewState('hubally');
-    } else if (tenant) {
+    } else if (tenant && tenant !== tenantParamCode) {
       setTenantParamCode(tenant);
       setViewState('hubtenant');
     }
@@ -392,6 +410,9 @@ export default function App() {
             onBack={() => setView('portal')} 
             isStaffLoggedIn={isStaffLoggedIn}
             highlightCode={allyParamCode}
+            onGoToShowroom={() => setView('client')}
+            isManagerAuthenticated={isManagerAuthenticated}
+            setIsManagerAuthenticated={setIsManagerAuthenticated}
           />
         )}
         {view === 'hubtenant' && (
@@ -400,6 +421,9 @@ export default function App() {
             isStaffLoggedIn={isStaffLoggedIn}
             initialCode={tenantParamCode}
             onSetReferralBanner={(t) => setActiveReferralTenant(t)}
+            onGoToShowroom={() => setView('client')}
+            isManagerAuthenticated={isManagerAuthenticated}
+            setIsManagerAuthenticated={setIsManagerAuthenticated}
           />
         )}
         {view === 'repair' && <RepairDashboard />}
